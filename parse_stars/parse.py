@@ -1,26 +1,25 @@
 import csv
 import os
 import logging
+import re
 
-## Input Files
+## Input Files to change
 filename_periods = "sample_periodic.txt"
 filename_nonperiods = "sample_nonperiodic.txt"
 #filename_periods = "Table_Periodic.txt"
 #filename_nonperiods = "Table_Non_Periodic.txt"
 list_filenames = [filename_periods, filename_nonperiods]
 
-stellar_param = "sample_table.txt"
+stellar_param_filename = "sample_table.txt"
 #stellar_param_filename = "table4.dat"
 stellar_params_i = [1, 4, 7] #KIC = 0, Teff, logg, Fe/H
 
-#good_kids_filename = "good_kids.txt"
 good_kids_file = "good_kids"
-parse_kids_filename = good_kids_file + "_parsed.txt"
-log_file = good_kids_file + ".log"
 
 kepmag_file_prefix = "kepler_fov_search"
 
 ## Logging
+log_file = good_kids_file + ".log"
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 handler = logging.FileHandler(log_file)
@@ -91,6 +90,7 @@ def remove_bright_neighbours():
     difference_max = 2.0
     curr_id = -1
     count = 0
+    parse_kids_filename = good_kids_file + "_parsed.txt"
 
     if os.path.exists(parse_kids_filename):
         ans = input("File already exists, do you want to proceed for all? (y/n) ")
