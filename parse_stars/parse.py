@@ -4,12 +4,12 @@ import logging
 import itertools
 
 ## Input Files to change
-filename_periods = "Table_Periodic.txt"
+filename_periods = "./data/Table_Periodic.txt"
 #filename_nonperiods = "Table_Non_Periodic.txt"
 list_filenames = [filename_periods]
 
-stellar_param_filename = "table4.dat"
-stellar_params_i = [1, 4, 7] #KIC = 0, Teff, logg, Fe/H
+stellar_param_filename = "./data/table4.dat"
+#KIC = 0, Teff, logg, Fe/H
 
 good_kids_file = "good_kids"
 
@@ -227,8 +227,8 @@ def remove_bright_neighbours_separate():
     is_first_entry = True
     target_kid_has_data = True
     not_passed_last_entry = True
-    single_parsed_kids_filename = good_kids_file + "_parsed_single.txt"
-    batch_parsed_kids_filename = good_kids_file + "_parsed_batch.txt"
+    single_parsed_kids_filename = good_kids_file + "_single.txt"
+    batch_parsed_kids_filename = good_kids_file + "_batch.txt"
 
     input_files = sorted([filename for filename in os.listdir('.') \
         if filename.startswith(kepmag_file_prefix)])
@@ -313,6 +313,6 @@ def remove_bright_neighbours_separate():
     logging.info("remove_bright_neighbours_separate done")
     return 0
 
-## Tests
+## Main
 #array_to_file(get_good_kids(stellar_param_filename, get_kids(list_filenames)))
 #remove_bright_neighbours_separate()
