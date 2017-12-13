@@ -5,15 +5,14 @@ import itertools
 
 ## Input Files to change
 filename_periods = "./data/Table_Periodic.txt"
-#filename_nonperiods = "Table_Non_Periodic.txt"
+filename_nonperiods = "./data/Table_Non_Periodic.txt"
 list_filenames = [filename_periods]
 
-stellar_param_filename = "./data/table4.dat"
-#KIC = 0, Teff, logg, Fe/H
+stellar_param_filename = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
 
-good_kids_file = "good_kids"
+good_kids_file = "results/good_kids"
 
-kepmag_file_prefix = "kepler_fov_search"
+kepmag_file_prefix = "./data/kepler_fov_search"
 
 ## Logging
 log_file = good_kids_file + ".log"

@@ -1,15 +1,20 @@
 from f3 import photometry
 from matplotlib.backends.backend_pdf import PdfPages
+from os.path import basename
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
 import csv
+import os
 
 # Setup
-file_name = "parsed_single"
+file_name = "sample_single"
+files_txt = ["./data/" + x.split('.')[0] for x in os.listdir("./data/") if x.endswith(".txt")]
+if len(files_txt) != 0:
+    file_name = files_txt[0]
 
 targets_file = file_name + ".txt"
-output_file = "plot_" + file_name + ".pdf"
+output_file = file_name + "_plot.pdf"
 log_file = file_name + ".log"
 
 fmt = ['ko', 'rD', 'b^', 'gs']
@@ -24,11 +29,14 @@ formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-logging.getLogger(photometry.__name__).setLevel(logging.ERROR)
+#logging.getLogger(photometry.__name__).setLevel(logging.ERROR)
 
 # Functions
 
 def plot_data(targ, do_roll=True, ignore_bright=0):
+
+    #TODO: have subplot for aperture
+    
     targ.data_for_target(do_roll, ignore_bright)
 
     for i in range(4):
@@ -39,18 +47,24 @@ def plot_data(targ, do_roll=True, ignore_bright=0):
     plt.ylabel('Relative Flux', fontsize=15)
     plt.title(targ.kic, fontsize=15)
 
+    plt.subplot(122)
+    plt.imshow((np.ceil(targets/100.0)*self.integrated_postcard+np.ceil(targets/500.0)*3500000), 
+                       interpolation='nearest', cmap='gray', vmax=np.percentile(self.integrated_postcard, 99.99))
+    # implot = plt.imshow(img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
+
 
 def run_photometry(targ):
     target = photometry.star(targ)
 
     target.make_postcard()
 
-    target.find_other_sources()
+    target.find_other_sources(ntargets=100, plot_flag=False)
 
     plot_data(target)
 
 
 def plot_targets(targets_file):
+    
     with PdfPages(output_file) as pdf:
         with open(targets_file) as f:
             reader = csv.reader(f)
