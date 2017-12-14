@@ -1,15 +1,19 @@
-from f3 import photometry
-from matplotlib.backends.backend_pdf import PdfPages
-from os.path import basename
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
 import logging
 import csv
 import os
+from matplotlib.backends.backend_pdf import PdfPages
+from f3 import photometry
+
 
 # Setup
+f3_location = "/home/user/Desktop/astrolab/solar_data/f3_edit/"
+
 file_name = "sample_single"
-files_txt = ["./data/" + x.split('.')[0] for x in os.listdir("./data/") if x.endswith(".txt")]
+files_txt = ["./data/" + x.split('.')[0]
+             for x in os.listdir("./data/") if x.endswith(".txt")]
 if len(files_txt) != 0:
     file_name = files_txt[0]
 
@@ -33,25 +37,32 @@ logger.addHandler(handler)
 
 # Functions
 
-def plot_data(targ, do_roll=True, ignore_bright=0):
+def plot_data(targ, do_roll=True, ignore_bright=0, image_region=15):
 
     #TODO: have subplot for aperture
     
     targ.data_for_target(do_roll, ignore_bright)
 
+    fig = plt.figure(figsize=(11,8))
+    gs.GridSpec(3,3)
+
+    plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=3)
     for i in range(4):
         g = np.where(targ.qs == i)[0]
         plt.errorbar(targ.times[g], targ.obs_flux[g], yerr=targ.flux_uncert[i], fmt=fmt[i])
 
     plt.xlabel('Time', fontsize=15)
     plt.ylabel('Relative Flux', fontsize=15)
-    plt.title(targ.kic, fontsize=15)
 
-    plt.subplot(122)
-    plt.imshow((np.ceil(targets/100.0)*self.integrated_postcard+np.ceil(targets/500.0)*3500000), 
-                       interpolation='nearest', cmap='gray', vmax=np.percentile(self.integrated_postcard, 99.99))
-    # implot = plt.imshow(img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
+    plt.subplot2grid((3,3), (1,2))
+    plt.title(targ.kic, fontsize=20)
+    jj, ii = targ.center
+    jj, ii = int(jj), int(ii)
+    img = np.sum(((targ.targets == 1)*targ.postcard + (targ.targets == 1)*100000)
+                     [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
+    plt.imshow(img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
 
+    fig.tight_layout()
 
 def run_photometry(targ):
     target = photometry.star(targ)
@@ -80,5 +91,7 @@ def plot_targets(targets_file):
 def main():
     plot_targets(targets_file)
 
-if __name__ == "__main__":
+if __name__ == "__main__" and __package__ is None:
+    from os import sys, path
+    sys.path.append(f3_location)
     main()
