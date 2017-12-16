@@ -7,7 +7,6 @@ import os
 from matplotlib.backends.backend_pdf import PdfPages
 from f3 import photometry
 
-
 # Setup
 f3_location = "/home/user/Desktop/astrolab/solar_data/f3_edit/"
 
@@ -23,7 +22,6 @@ log_file = file_name + ".log"
 
 fmt = ['ko', 'rD', 'b^', 'gs']
 
-
 # Logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -33,14 +31,10 @@ formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-#logging.getLogger(photometry.__name__).setLevel(logging.ERROR)
-
 # Functions
 
 def plot_data(targ, do_roll=True, ignore_bright=0, image_region=15):
 
-    #TODO: have subplot for aperture
-    
     targ.data_for_target(do_roll, ignore_bright)
 
     fig = plt.figure(figsize=(11,8))
@@ -75,7 +69,7 @@ def run_photometry(targ):
 
 
 def plot_targets(targets_file):
-    
+
     with PdfPages(output_file) as pdf:
         with open(targets_file) as f:
             reader = csv.reader(f)
