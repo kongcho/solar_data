@@ -8,7 +8,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from f3 import photometry
 
 # Setup
-f3_location = "/home/user/Desktop/astrolab/solar_data/f3_edit/"
+f3_location = "/home/user/Desktop/astrolab/solar_data/f3_edit/f3/"
 
 file_name = "sample_single"
 targets_files = [file_name]
