@@ -5,6 +5,7 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
+from collections import Counter
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
@@ -104,10 +105,9 @@ def get_good_kids(param_filename, list_kids, param_arr):
 
 # prints array to column in file, splits up files by number_kids_per_file
 # returns length of array
-def array_to_file(arr):
+def array_to_file(arr, number_kids_per_file=9999):
     arr_i = 0
     total_kids = len(arr)
-    number_kids_per_file = 9999
     output_files_i = 0
     number_of_files = total_kids//number_kids_per_file + 1
     remainder_of_files = total_kids%number_kids_per_file
@@ -133,7 +133,7 @@ def array_to_file(arr):
     logger.info("array_to_file done")
     return total_kids
 
-
+# prints array to each row in filename (good for kics)
 def simple_array_to_file(filename, arr):
     if os.path.exists(filename):
         ans = input("File " + filename + " already exists, do you want to proceed for all? (y/n) ")
@@ -147,7 +147,7 @@ def simple_array_to_file(filename, arr):
             writer.writerow([arr[i]])
     return 0
 
-
+# prints one dict of kid, kepmag, angsep to csv file
 def dict_to_file(filename, arr):
     if os.path.exists(filename):
         ans = input("File " + filename + " already exists, do you want to proceed for all? (y/n) ")
@@ -162,7 +162,7 @@ def dict_to_file(filename, arr):
             write_f.write(arr[i]["angsep"] + "\n")
     return 0
 
-
+# prints a dict of a kic and its neighbours to csv file
 def dicts_to_file(filename, arr):
     if os.path.exists(filename):
         ans = input("File " + filename + " already exists, do you want to proceed for all? (y/n) ")
@@ -194,10 +194,9 @@ def element_is_not_in_list(arr, n):
 # assumes that list of neighbour stars follows each target stars
 # assumes list of input stars has same order and is same as processed stars
 # removes duplicates
-def remove_bright_neighbours_together():
+def remove_bright_neighbours_together(difference_max = 2.0):
     all_kids = []
     kepmag_col_no = 1
-    difference_max = 2.0
     curr_id = -1
     count = 0
 
@@ -250,8 +249,7 @@ def remove_bright_neighbours_together():
 
 # doesn't remove duplicates
 # outputs separate files for stars with no neighbours and with neighbours
-def remove_bright_neighbours_separate():
-    difference_max = 2.0
+def remove_bright_neighbours_separate(difference_max = 2.0):
     single_kids = []
     batch_kids = []
     curr_dict = {}
@@ -347,9 +345,9 @@ def remove_bright_neighbours_separate():
     logger.info("remove_bright_neighbours_separate done")
     return 0
 
-
-def plot_data(targ, count, image_region, do_roll=True, ignore_bright=0):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start "))
+# creates plot for one target, assumes already have obs_flux, flux_uncert
+def plot_data(targ, count=0, image_region=15, do_roll=True, ignore_bright=0):
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start"))
 
     fig = plt.figure(figsize=(11,8))
     gs.GridSpec(3,3)
@@ -359,9 +357,9 @@ def plot_data(targ, count, image_region, do_roll=True, ignore_bright=0):
 
     plt.subplot2grid((3,3), (1,2))
     plt.title(targ.kic, fontsize=20)
-    img = np.sum(((targ.targets == 1)*targ.postcard + (targ.targets == 1)*100000)
-                     [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
-    plt.imshow(img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
+#    img = np.sum(((targ.targets == 1)*targ.postcard + (targ.targets == 1)*100000)
+#                 [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
+    plt.imshow(targ.img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
 
     plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=3)
     for i in range(4):
@@ -376,9 +374,9 @@ def plot_data(targ, count, image_region, do_roll=True, ignore_bright=0):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data end "))
     return 0
 
-
-def is_more_or_less(target, quarters):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_more_or_less start "))
+# helper function that determines 3-point pattern, but all quarters from the
+#   same channel must have the same pattern
+def is_more_or_less_all(target, quarters):
     is_strange = 0
     is_incr = False
     is_decr = False
@@ -403,10 +401,47 @@ def is_more_or_less(target, quarters):
                 return 0
         elif (is_strange == 1 and not is_incr) or (is_strange == -1 and not is_decr):
             return 0
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_more_or_less end "))
     return is_strange
 
+# helper function for is_more_or_less
+# returns are all but one element is nonzero in an array
+def most_are_same(arr):
+    counts = Counter(arr)
+    for no, count in counts.items():
+        if (count >= (len(arr) - 1)) and (no != 0):
+            return True, no
+    return False
 
+# helper function that determines 3-point pattern
+# all but one pattern from same channel must be the same
+# returns -1 for downward, +1 for upward
+def is_more_or_less(target, quarters):
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_more_or_less start "))
+    curr_ch = []
+    is_incr = False
+    is_decr = False
+    for indexes in quarters:
+        for i in range(len(indexes) - 1):
+            if target.obs_flux[indexes[i + 1]] > target.obs_flux[indexes[i]]:
+                if is_decr:
+                    is_decr = False
+                    break
+                is_incr = True
+            elif target.obs_flux[indexes[i + 1]] < target.obs_flux[indexes[i]]:
+                if is_incr:
+                    is_incr = False
+                    break
+                is_decr = True
+        is_strange = 1 if is_incr else -1 if is_decr else 0
+        curr_ch.append(is_strange)
+    is_nontrivial = most_are_same(curr_ch)
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_more_or_less end "))
+    if is_nontrivial:
+        return is_nontrivial[1]
+    return 0
+
+# determines if 3-point pattern exists
+# aperture is too large (many stars in aperture) or too small (psf going out)
 def is_large_ap(target):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_large_ap start "))
     golden = range(0, 8)
@@ -422,7 +457,36 @@ def is_large_ap(target):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_large_ap end 2"))
     return False
 
+def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, difference=0.5):
+    center = img[15][15]
+    others = [xi0j1, xi0j2, xi1j0, xi2j0]
+    booleans = [xi0j0 != 0
+                , all(x != 0 for x in others)
+                , all(x < xi0j0 for x in others)
+                , all(x >= ((1-difference)*center) for x in others)
+             ]
+    return all(booleans)
 
+def has_peaks(target):
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak start "))
+    main_peak = target.img[15][15]
+    img = target.img
+#    peaks = 1
+#    peak_locations = []
+    for i in range(2, len(img) - 2):
+        for j in range(2, len(img[i]) - 2):
+            if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
+                continue
+            if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], img[i-1][j], img[i+1][j]):
+                print(i, j)
+                print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak end 1"))
+                return True
+#                peaks += 1
+#                peak_locations.append((i, j))
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak end 2"))
+    return False
+
+# get list of kics from a file where kic is first of a column
 def get_kics(filename):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tget_kics start "))
     all_kics = []
@@ -434,8 +498,8 @@ def get_kics(filename):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tget_kics end "))
     return all_kics
 
-
-def run_photometry(boolean_func, targ, count, image_region=15):
+# sets up photometry for a star
+def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry start "))
     target = photometry.star(targ)
     target.make_postcard()
@@ -444,38 +508,103 @@ def run_photometry(boolean_func, targ, count, image_region=15):
     jj, ii = int(jj), int(ii)
 
     if ii - image_region <= 0 or jj - image_region <=0:
+        print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry end 1"))
         return 1
 
-    target.find_other_sources(ntargets=100, plot_flag=False)
+    target.find_other_sources(edge_lim, min_val, ntargets=100, plot_flag=False)
     target.data_for_target(do_roll=True, ignore_bright=0)
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry end "))
-    return plot_data(target, count, image_region) if boolean_func(target) else 1
 
+    img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)
+                     [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
+    setattr(photometry.star, 'img', img)
 
-def plot_targets(boolean_func, filename):
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry end 2"))
+    return target
+
+# helper function for plot_targets that sets up photometry of a star
+#   runs a photometry and tests a list of boolean functions on it
+#   then creates a plot for it with plot_data
+def tests_booleans(targ, boolean_funcs, count, image_region=15, edge_lim=0.015, min_val=500):
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\ttests_booleans start"))
+    target = run_photometry(targ, image_region, edge_lim, min_val)
+    if target == 1:
+        return 1
+    for boolean in boolean_funcs:
+        if boolean(target):
+            return 1
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\ttest_booleans end"))
+    return plot_data(target, count, image_region)
+
+# plots list of targets to a filename if the boolean function is true
+def plot_targets(filename, boolean_funcs, targets):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_targets start "))
-    targets = get_kics(filename)
     total = len(targets)
     count = 1
-    output_file = filename + str(boolean_func.__name__) + ".pdf"
+    parsed_targets = []
+    if len(boolean_funcs) == 1:
+        output_file = filename + str(boolean_funcs[0].__name__) + ".pdf"
+    else:
+        output_file = filename + "_bads.pdf"
     with PdfPages(output_file) as pdf:
         for target in targets:
-            if run_photometry(boolean_func, target, count) == 0:
+            if tests_booleans(target, boolean_funcs, count) == 0:
+                parsed_targets.append(target)
                 pdf.savefig()
                 plt.close()
                 logger.info(str(count) + "\t" + target + "\tplot_done")
                 count += 1
-
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_targets end "))
     logger.info(str(count) + " out of " + str(total) + " targets plotted")
     logger.info("plot_targets done")
-    return 0
+    return parsed_targets
 
-def get_nice_apertures(targets):
-    pass
+# TODO: gets better apertures
+def get_better_apertures(target, boolean_func, edge_lim=0.015, min_val=5000,
+                         extend_region_size=3, remove_excess=4, image_region=1):
+
+    count = 0
+
+    target = photometry.star(targ)
+    target.make_postcard()
+
+    edge_lims = range(edge_lim - 0.010, edge_lim + 0.015, 0.005)
+    min_vals = range(min_val - 2000, min_val + 2000, 500)
+    region_sizes = range(5)
+    excesses = range(2, 6)
+
+    vals = []
+    for val_1 in edge_lims:
+        for val_2 in min_vals:
+            vals.append(val_1, val_2)
+
+    results = {}
+    for val in vals:
+        target.find_other_sources(val[0], val[1], ntargets=100, plot_flag=False)
+        target.data_for_target(do_roll=True, ignore_bright=0)
+        results[val] = boolean_func(target)
+        plot_data(target, count, image_region)
+        count += 1
+
+    plt.show()
+    return
+
 
 def testing():
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start"))
+    targ = "893033"
+    target = photometry.star(targ)
+    target.make_postcard()
+
+    target.find_other_sources(edge_lim=0.08, min_val=5000, ntargets=100,
+                              extend_region_size=3, remove_excess=4, plot_flag=False)
+    target.data_for_target(do_roll=True, ignore_bright=0)
+
+    print(is_large_ap(target))
+    plot_data(target, count=0, image_region=15)
+    plt.show()
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start"))
     return
+
 
 def main():
     # gets good kics to be put into MAST
@@ -485,10 +614,20 @@ def main():
     # remove_bright_neighbours_separate()
 
     # plots list of files with kics using f3
-    # plot_targets(True, targets_file)
+    # plot_targets(targets_file, [True], get_kics(targets_file))
 
-    plot_targets(is_large_ap, targets_file)
+    plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
 
+    #testing()
+#    target = run_photometry("893559")
+#    print(len(target.targets))
+#    print(len(target.targets[0]))
+#    print(len(target.postcard))
+#    print(len(target.postcard[0]))
+
+#    print(has_one_peak(target))
+#    plot_data(target)
+#    plt.show()
     print("everything done")
 
 if __name__ == "__main__" and __package__ is None:
