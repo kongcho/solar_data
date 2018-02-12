@@ -5,12 +5,15 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
+from math import sqrt
 from collections import Counter
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 ## Setup
 f3_location = "/home/user/Desktop/astrolab/solar_data/parse_stars/f3"
+res_folder = "./results/"
+output_folder = "./tests/"
 
 ## Input Files to change
 filename_periods = "./data/Table_Periodic.txt"
@@ -21,13 +24,13 @@ stellar_param_filename = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
 kepmag_file_prefix = "./data/kepler_fov_search"
 
 ## Output Files
-file_name = "results/good_kids"
+file_name = output_folder + "good_kids"
 
-output_file = file_name + "_plot.pdf"
-log_file = file_name + ".log"
-parsed_kids_filename = file_name + "_parsed.txt"
-single_parsed_kids_filename = file_name + "_single.txt"
-batch_parsed_kids_filename = file_name + "_batch.txt"
+output_file = output_folder + file_name + "_plot.pdf"
+log_file = output_folder + file_name + ".log"
+parsed_kids_filename = results_folder + file_name + "_parsed.txt"
+single_parsed_kids_filename = results_folder + file_name + "_single.txt"
+batch_parsed_kids_filename = results_folder + file_name + "_batch.txt"
 
 targets_file = single_parsed_kids_filename
 targets_files = [targets_file]
@@ -440,7 +443,7 @@ def is_more_or_less(target, quarters):
         return is_nontrivial[1]
     return 0
 
-# determines if 3-point pattern exists
+# boolean function: determines if 3-point pattern exists
 # aperture is too large (many stars in aperture) or too small (psf going out)
 def is_large_ap(target):
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_large_ap start "))
@@ -464,11 +467,43 @@ def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, difference=0.5):
                 , all(x != 0 for x in others)
                 , all(x < xi0j0 for x in others)
                 , all(x >= ((1-difference)*center) for x in others)
-             ]
+               ]
     return all(booleans)
 
+def has_close_peaks(target, diff=7):
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_close_peaks start "))
+    img = target.img
+    len_x = len(img[0])
+    len_y = len(img)
+    c_i = len_x%2
+    c_j = len_y%2
+    main_peak = target.img[c_i][c_j]
+    if c_i <= diff:
+        min_i = 1
+        max_i = len_x - 1
+    else:
+        min_i = c_i - diff
+        max_i = c_i + diff
+    if c_j <= diff:
+        min_j = 1
+        max_j = len_y - 1
+    else:
+        min_j = c_j - diff
+        max_j = c_j + diff
+    for i in range(min_i, max_i):
+        for j in range(min_j, max_j):
+            if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
+                continue
+            if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], img[i-1][j], img[i+1][j]):
+                    print(i, j)
+                    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_close_peaks end 1"))
+                    return True
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_close_peaks end 2"))
+    return False
+
+# boolean function: determines if aperture has more than one bright peak
 def has_peaks(target):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak start "))
+    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_peak start "))
     main_peak = target.img[15][15]
     img = target.img
 #    peaks = 1
@@ -478,11 +513,11 @@ def has_peaks(target):
             if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
                 continue
             if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], img[i-1][j], img[i+1][j]):
-                print(i, j)
-                print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak end 1"))
-                return True
-#                peaks += 1
-#                peak_locations.append((i, j))
+                    print(i, j)
+                    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_peak end 1"))
+                    return True
+#               peaks += 1
+#               peak_locations.append((i, j))
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak end 2"))
     return False
 
@@ -534,6 +569,26 @@ def tests_booleans(targ, boolean_funcs, count, image_region=15, edge_lim=0.015, 
             return 1
     print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\ttest_booleans end"))
     return plot_data(target, count, image_region)
+
+# outputs dict of functions that finds faulty stars
+#   and kics that fall in those functions
+def get_boolean_stars(targets, boolean_funcs, image_region=15, edge_lim=0.015, min_val=500):
+    full_dict = {}
+    full_dict["good"] = []
+    for boolean_func in boolean_funcs:
+        full_dict[boolean_func.__name__] = []
+    for targ in targets:
+        is_faulty = False
+        target = run_photometry(targ, image_region, edge_lim, min_val)
+        if target == 1:
+            return 1
+        for boolean in boolean_funcs:
+            if boolean(target):
+                full_dict[boolean.__name__].append(target)
+                is_faulty = True
+        if not is_faulty:
+            full_dict["good"].append(target)
+    return full_dict
 
 # plots list of targets to a filename if the boolean function is true
 def plot_targets(filename, boolean_funcs, targets):
@@ -615,19 +670,9 @@ def main():
 
     # plots list of files with kics using f3
     # plot_targets(targets_file, [True], get_kics(targets_file))
+    # plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
 
-    plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
-
-    #testing()
-#    target = run_photometry("893559")
-#    print(len(target.targets))
-#    print(len(target.targets[0]))
-#    print(len(target.postcard))
-#    print(len(target.postcard[0]))
-
-#    print(has_one_peak(target))
-#    plot_data(target)
-#    plt.show()
+    # testing()
     print("everything done")
 
 if __name__ == "__main__" and __package__ is None:
