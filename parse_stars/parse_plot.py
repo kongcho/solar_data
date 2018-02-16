@@ -12,7 +12,7 @@ from datetime import datetime
 
 ## Setup
 f3_location = "/home/user/Desktop/astrolab/solar_data/parse_stars/f3"
-res_folder = "./results/"
+results_folder = "./results/"
 output_folder = "./tests/"
 
 ## Input Files to change
@@ -24,7 +24,7 @@ stellar_param_filename = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
 kepmag_file_prefix = "./data/kepler_fov_search"
 
 ## Output Files
-file_name = output_folder + "good_kids"
+file_name = "good_kids"
 
 output_file = output_folder + file_name + "_plot.pdf"
 log_file = output_folder + file_name + ".log"
@@ -44,13 +44,18 @@ def set_filenames_based_on_folders():
         targets_files = targets_files_temp
 
 ## Logging
-log_file = file_name + ".log"
-logger = logging.getLogger(__name__)
-handler = logging.FileHandler(log_file)
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+handler = logging.FileHandler(log_file)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+
+# TODO: fix logging to stfout with proper format...?
+#handler_stdout = logging.StreamHandler()
+#handler_stdout.setFormatter(formatter)
+#logger.addHandler(handler_stdout)
 
 
 ## Functions
@@ -350,13 +355,11 @@ def remove_bright_neighbours_separate(difference_max = 2.0):
 
 # creates plot for one target, assumes already have obs_flux, flux_uncert
 def plot_data(targ, count=0, image_region=15, do_roll=True, ignore_bright=0):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start"))
-
     fig = plt.figure(figsize=(11,8))
     gs.GridSpec(3,3)
 
-    jj, ii = targ.center
-    jj, ii = int(jj), int(ii)
+#    jj, ii = targ.center
+#    jj, ii = int(jj), int(ii)
 
     plt.subplot2grid((3,3), (1,2))
     plt.title(targ.kic, fontsize=20)
@@ -374,7 +377,7 @@ def plot_data(targ, count=0, image_region=15, do_roll=True, ignore_bright=0):
     fig.text(7.5/8.5, 0.5/11., str(count + 1), ha='center', fontsize = 12)
     fig.tight_layout()
 
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data end "))
+    logger.info("plot_data done")
     return 0
 
 # helper function that determines 3-point pattern, but all quarters from the
@@ -419,7 +422,6 @@ def most_are_same(arr):
 # all but one pattern from same channel must be the same
 # returns -1 for downward, +1 for upward
 def is_more_or_less(target, quarters):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_more_or_less start "))
     curr_ch = []
     is_incr = False
     is_decr = False
@@ -438,7 +440,6 @@ def is_more_or_less(target, quarters):
         is_strange = 1 if is_incr else -1 if is_decr else 0
         curr_ch.append(is_strange)
     is_nontrivial = most_are_same(curr_ch)
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_more_or_less end "))
     if is_nontrivial:
         return is_nontrivial[1]
     return 0
@@ -446,7 +447,6 @@ def is_more_or_less(target, quarters):
 # boolean function: determines if 3-point pattern exists
 # aperture is too large (many stars in aperture) or too small (psf going out)
 def is_large_ap(target):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_large_ap start "))
     golden = range(0, 8)
     blacks = [[8, 9], [20, 21, 22], [31, 32, 33], [43, 44, 45]]
     reds = [[10, 11, 12], [23, 24, 25], [34, 35, 36], [46, 47, 48]]
@@ -455,12 +455,12 @@ def is_large_ap(target):
     channels = [blacks, reds, blues, greens]
     for channel in channels:
         if is_more_or_less(target, channel) != 0:
-            print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_large_ap end 1"))
+            logger.info("is_large_ap True")
             return True
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tis_large_ap end 2"))
+    logger.info("is_large_ap False")
     return False
 
-def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, difference=0.5):
+def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, difference=0):
     center = img[15][15]
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [xi0j0 != 0
@@ -470,8 +470,9 @@ def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, difference=0.5):
                ]
     return all(booleans)
 
+# boolean function: determines if there's a peak within a given distance
+#   around center point (target star)
 def has_close_peaks(target, diff=7):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_close_peaks start "))
     img = target.img
     len_x = len(img[0])
     len_y = len(img)
@@ -495,15 +496,13 @@ def has_close_peaks(target, diff=7):
             if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
                 continue
             if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], img[i-1][j], img[i+1][j]):
-                    print(i, j)
-                    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_close_peaks end 1"))
-                    return True
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_close_peaks end 2"))
+                logger.info("has_close_peaks True")
+                return True
+    logger.info("has_close_peaks False")
     return False
 
 # boolean function: determines if aperture has more than one bright peak
 def has_peaks(target):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_peak start "))
     main_peak = target.img[15][15]
     img = target.img
 #    peaks = 1
@@ -513,29 +512,26 @@ def has_peaks(target):
             if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
                 continue
             if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], img[i-1][j], img[i+1][j]):
-                    print(i, j)
-                    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_peak end 1"))
-                    return True
+                logger.info("has_peaks True")
+                return True
 #               peaks += 1
 #               peak_locations.append((i, j))
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\thas_one_peak end 2"))
+    logger.info("has_peaks False")
     return False
 
 # get list of kics from a file where kic is first of a column
 def get_kics(filename):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tget_kics start "))
     all_kics = []
     with open(filename) as f:
         reader = csv.reader(f)
         for row in reader:
             all_kics.append(row[0])
     logger.info("get_kics done")
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tget_kics end "))
     return all_kics
 
-# sets up photometry for a star
-def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry start "))
+# sets up photometry for a star and adds aperture to class
+def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, \
+                   ntargets=100, extend_region_size=3, remove_excess=4):
     target = photometry.star(targ)
     target.make_postcard()
 
@@ -543,31 +539,31 @@ def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000):
     jj, ii = int(jj), int(ii)
 
     if ii - image_region <= 0 or jj - image_region <=0:
-        print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry end 1"))
+        logger.info("run_photometry unsuccessful")
         return 1
 
-    target.find_other_sources(edge_lim, min_val, ntargets=100, plot_flag=False)
+    target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
+                              remove_excess, plot_flag=False)
     target.data_for_target(do_roll=True, ignore_bright=0)
 
     img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)
                      [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
     setattr(photometry.star, 'img', img)
 
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\trun_photometry end 2"))
+    logger.info("run_photometry done")
     return target
 
 # helper function for plot_targets that sets up photometry of a star
 #   runs a photometry and tests a list of boolean functions on it
 #   then creates a plot for it with plot_data
 def tests_booleans(targ, boolean_funcs, count, image_region=15, edge_lim=0.015, min_val=500):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\ttests_booleans start"))
     target = run_photometry(targ, image_region, edge_lim, min_val)
     if target == 1:
         return 1
     for boolean in boolean_funcs:
         if boolean(target):
             return 1
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\ttest_booleans end"))
+    logger.info("tests_booleans done")
     return plot_data(target, count, image_region)
 
 # outputs dict of functions that finds faulty stars
@@ -588,11 +584,11 @@ def get_boolean_stars(targets, boolean_funcs, image_region=15, edge_lim=0.015, m
                 is_faulty = True
         if not is_faulty:
             full_dict["good"].append(target)
+    logger.info("get_boolean_stars done")
     return full_dict
 
 # plots list of targets to a filename if the boolean function is true
 def plot_targets(filename, boolean_funcs, targets):
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_targets start "))
     total = len(targets)
     count = 1
     parsed_targets = []
@@ -602,66 +598,103 @@ def plot_targets(filename, boolean_funcs, targets):
         output_file = filename + "_bads.pdf"
     with PdfPages(output_file) as pdf:
         for target in targets:
+            logger.info("current: " + target)
             if tests_booleans(target, boolean_funcs, count) == 0:
                 parsed_targets.append(target)
                 pdf.savefig()
                 plt.close()
                 logger.info(str(count) + "\t" + target + "\tplot_done")
                 count += 1
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_targets end "))
-    logger.info(str(count) + " out of " + str(total) + " targets plotted")
+    logger.info(str(count - 1) + " out of " + str(total) + " targets plotted")
     logger.info("plot_targets done")
     return parsed_targets
 
-# TODO: gets better apertures
-def get_better_apertures(target, boolean_func, edge_lim=0.015, min_val=5000,
-                         extend_region_size=3, remove_excess=4, image_region=1):
+def is_std_better_biggest(old_stds, stds):
+    max_i = np.argmax(stds)
+    return stds[max_i] <= old_stds[max_i]
 
+def is_std_better_avg(old_stds, stds):
+    return np.average(stds) <= np.average(old_stds)
+
+def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, \
+                           ntargets=100, extend_region_size=3, remove_excess=4):
+    target.find_other_sources(edge_lim=edge_lim, min_val=min_val, ntargets=ntargets, \
+                              extend_region_size=extend_region_size, plot_flag=False)
+    target.data_for_target(do_roll=True, ignore_bright=0)
+    jj, ii = target.center
+    jj, ii = int(jj), int(ii)
+    img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)
+                 [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
+    setattr(photometry.star, 'img', img)
+    logger.info("run_partial_photometry done")
+    return 0
+
+# TODO: gets better apertures
+def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000,
+                           extend_region_size=3, remove_excess=4, image_region=15):
     count = 0
 
     target = photometry.star(targ)
     target.make_postcard()
 
-    edge_lims = range(edge_lim - 0.010, edge_lim + 0.015, 0.005)
-    min_vals = range(min_val - 2000, min_val + 2000, 500)
-    region_sizes = range(5)
-    excesses = range(2, 6)
+    edge_lims = np.arange(edge_lim - 0.010, edge_lim + 0.025, 0.005)
+    min_vals = np.arange(min_val - 2000, min_val + 2000, 500)
+    region_sizes = np.arange(2, 5)
+    excesses = np.arange(2, 6)
 
     vals = []
     for val_1 in edge_lims:
         for val_2 in min_vals:
-            vals.append(val_1, val_2)
+            vals.append((val_1, val_2))
 
     results = {}
-    for val in vals:
-        target.find_other_sources(val[0], val[1], ntargets=100, plot_flag=False)
-        target.data_for_target(do_roll=True, ignore_bright=0)
-        results[val] = boolean_func(target)
-        plot_data(target, count, image_region)
-        count += 1
 
-    plt.show()
+    run_partial_photometry(target, edge_lim=0.015, min_val=5000, \
+                           extend_region_size=3, remove_excess=4, ntargets=100)
+    old_stds = target.flux_uncert
+    plot_data(target, count, image_region)
+
+    with PdfPages(output_file) as pdf:
+        for val in vals:
+            count += 1
+            res = {}
+            run_partial_photometry(target, edge_lim=val[0], min_val=val[1], \
+                                   extend_region_size=extend_region_size, \
+                                   remove_excess=remove_excess, ntargets=100)
+            res["settings"] = val
+            res["boolean"] = boolean_func(target)
+            res["is_avg"] = is_std_better_avg(old_stds, target.flux_uncert)
+            res["is_most"] = is_std_better_biggest(old_stds, target.flux_uncert)
+            res["has_peaks"] = has_close_peaks(target)
+            results[val] = res
+            plot_data(target, count, image_region)
+            plt.gcf().text(4/8.5, 1/11., str(res), ha='center', fontsize = 12)
+            pdf.savefig()
+            plt.close()
+    logger.info("get_better_apertures done")
     return
 
-
 def testing():
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start"))
     targ = "893033"
     target = photometry.star(targ)
     target.make_postcard()
 
-    target.find_other_sources(edge_lim=0.08, min_val=5000, ntargets=100,
+    target.find_other_sources(edge_lim=0.08, min_val=5000, ntargets=100, \
                               extend_region_size=3, remove_excess=4, plot_flag=False)
     target.data_for_target(do_roll=True, ignore_bright=0)
 
     print(is_large_ap(target))
     plot_data(target, count=0, image_region=15)
     plt.show()
-    print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\tplot_data start"))
+    logger.info("testing done")
     return
 
+def fake_bool(target):
+    logger.info("fake_bool done")
+    return False
 
 def main():
+    logger.info("### starting ###")
     # gets good kics to be put into MAST
     # array_to_file(get_good_kids(stellar_param_filename, get_kids(list_filenames)))
 
@@ -669,11 +702,12 @@ def main():
     # remove_bright_neighbours_separate()
 
     # plots list of files with kics using f3
-    # plot_targets(targets_file, [True], get_kics(targets_file))
+    # plot_targets(output_file, [fake_bool], ["893033"])
     # plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
 
     # testing()
-    print("everything done")
+    print_better_apertures("893033", is_large_ap)
+    logger.info("### everything done ###")
 
 if __name__ == "__main__" and __package__ is None:
     from os import sys, path
