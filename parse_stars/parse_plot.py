@@ -52,15 +52,16 @@ handler = logging.FileHandler(log_file)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# TODO: fix logging to stfout with proper format...?
+# TODO: fix logging to stdout with proper format
 #handler_stdout = logging.StreamHandler()
 #handler_stdout.setFormatter(formatter)
 #logger.addHandler(handler_stdout)
 
 
 ## Functions
-# assume all kids are unique from each file
-# assumes first line are fieldnames
+
+# get all kids from several files
+# assume all kids are unique from each file, assumes first line are fieldnames
 def get_kids(list_files):
     kid_periods = []
     for files_i in range(len(list_files)):
@@ -73,6 +74,15 @@ def get_kids(list_files):
     logger.info("get_kids done")
     return(kid_periods)
 
+# get list of kics from a file where kic is first of a column
+def get_kics(filename):
+    all_kics = []
+    with open(filename) as f:
+        reader = csv.reader(f)
+        for row in reader:
+            all_kics.append(row[0])
+    logger.info("get_kics done")
+    return all_kics
 
 # checks if given kids have data from q1-17 kepler targets
 # assume all kids are unique and all data exists
@@ -90,7 +100,6 @@ def get_existing_kids(param_filename, list_kids):
 
 # checks if specific parameters exists
 # WARNING: no way to separate split string by spaces and detect no data
-# TODO: check if all parameters exist instead by checking if last element exists
 def get_good_kids(param_filename, list_kids, param_arr):
     list_good_kids = []
     exists_good_params = True
@@ -198,27 +207,27 @@ def element_is_not_in_list(arr, n):
             return False
     return True
 
-
-# assumes that list of neighbour stars follows each target stars
-# assumes list of input stars has same order and is same as processed stars
-# removes duplicates
-def remove_bright_neighbours_together(difference_max = 2.0):
+# removes stars from list with bright neighbours, and removes duplicats
+# assumes that list of neighbour stars follows each target stars, and
+#   list of input stars has same order and is same as processed stars
+def remove_bright_neighbours_together(folder, filename_out, difference_max=2.0):
     all_kids = []
     kepmag_col_no = 1
     curr_id = -1
     count = 0
+    # filename = parsed_kids_filename
 
-    if os.path.exists(parsed_kids_filename):
-        ans = input("File " + parsed_kids_filename + " already exists, do you want to proceed? (y/n) ")
+    if os.path.exists(filename_out):
+        ans = input("File " + filename + " already exists, do you want to proceed? (y/n) ")
         ans = ans.strip().lower()
         if (ans != "y"):
             print("Quitting...")
             return 1
 
-    input_files = sorted([filename for filename in os.listdir('.') \
+    input_files = sorted([filename for filename in os.listdir(folder) \
         if filename.startswith(kepmag_file_prefix)])
 
-    with open(parsed_kids_filename, 'w') as output_f:
+    with open(filename_out, 'w') as output_f:
         for input_files_i in range(len(input_files)):
             with open(input_files[input_files_i]) as input_f:
                 for line in input_f:
@@ -254,10 +263,9 @@ def remove_bright_neighbours_together(difference_max = 2.0):
     logger.info("remove_bright_neighbours_together done")
     return 0
 
-
 # doesn't remove duplicates
 # outputs separate files for stars with no neighbours and with neighbours
-def remove_bright_neighbours_separate(difference_max = 2.0):
+def remove_bright_neighbours_separate(folder, fout_prefix, difference_max = 2.0):
     single_kids = []
     batch_kids = []
     curr_dict = {}
@@ -269,8 +277,10 @@ def remove_bright_neighbours_separate(difference_max = 2.0):
     is_first_entry = True
     target_kid_has_data = True
     not_passed_last_entry = True
+    fout_single = single_parsed_kids_filename
+    fout_batch = batch_parsed_kids_filename
 
-    input_files = sorted([filename for filename in os.listdir('.') \
+    input_files = sorted([filename for filename in os.listdir(folder) \
         if filename.startswith(kepmag_file_prefix)])
 
     for input_files_i in range(len(input_files)):
@@ -346,38 +356,11 @@ def remove_bright_neighbours_separate(difference_max = 2.0):
                 else:
                     batch_kids.append(batch_dict)
                 not_passed_last_entry = False
-    dict_to_file(single_parsed_kids_filename, single_kids)
-    dicts_to_file(batch_parsed_kids_filename, batch_kids)
+    dict_to_file(fout_single, single_kids)
+    dicts_to_file(fout_batch, batch_kids)
     logger.info("printed " + str(len(single_kids)) + " kids with no neighbours")
     logger.info("printed " + str(len(batch_kids)) + " kids with neighbours")
     logger.info("remove_bright_neighbours_separate done")
-    return 0
-
-# creates plot for one target, assumes already have obs_flux, flux_uncert
-def plot_data(targ, count=0, image_region=15, do_roll=True, ignore_bright=0):
-    fig = plt.figure(figsize=(11,8))
-    gs.GridSpec(3,3)
-
-#    jj, ii = targ.center
-#    jj, ii = int(jj), int(ii)
-
-    plt.subplot2grid((3,3), (1,2))
-    plt.title(targ.kic, fontsize=20)
-#    img = np.sum(((targ.targets == 1)*targ.postcard + (targ.targets == 1)*100000)
-#                 [:,jj-image_region:jj+image_region,ii-image_region:ii+image_region], axis=0)
-    plt.imshow(targ.img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
-
-    plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=3)
-    for i in range(4):
-        g = np.where(targ.qs == i)[0]
-        plt.errorbar(targ.times[g], targ.obs_flux[g], yerr=targ.flux_uncert[i], fmt=targ.fmt[i])
-    plt.xlabel('Time', fontsize=15)
-    plt.ylabel('Relative Flux', fontsize=15)
-
-    fig.text(7.5/8.5, 0.5/11., str(count + 1), ha='center', fontsize = 12)
-    fig.tight_layout()
-
-    logger.info("plot_data done")
     return 0
 
 # helper function that determines 3-point pattern, but all quarters from the
@@ -505,8 +488,6 @@ def has_close_peaks(target, diff=7):
 def has_peaks(target):
     main_peak = target.img[15][15]
     img = target.img
-#    peaks = 1
-#    peak_locations = []
     for i in range(2, len(img) - 2):
         for j in range(2, len(img[i]) - 2):
             if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
@@ -514,20 +495,35 @@ def has_peaks(target):
             if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], img[i-1][j], img[i+1][j]):
                 logger.info("has_peaks True")
                 return True
-#               peaks += 1
-#               peak_locations.append((i, j))
     logger.info("has_peaks False")
     return False
 
-# get list of kics from a file where kic is first of a column
-def get_kics(filename):
-    all_kics = []
-    with open(filename) as f:
-        reader = csv.reader(f)
-        for row in reader:
-            all_kics.append(row[0])
-    logger.info("get_kics done")
-    return all_kics
+# boolean function: always passes every star, for testing
+def fake_bool(target):
+    logger.info("fake_bool done")
+    return False
+
+# creates plot for one target, assumes already have obs_flux, flux_uncert
+def plot_data(targ, count=0, image_region=15, do_roll=True, ignore_bright=0):
+    fig = plt.figure(figsize=(11,8))
+    gs.GridSpec(3,3)
+
+    plt.subplot2grid((3,3), (1,2))
+    plt.title(targ.kic, fontsize=20)
+    plt.imshow(targ.img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
+
+    plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=3)
+    for i in range(4):
+        g = np.where(targ.qs == i)[0]
+        plt.errorbar(targ.times[g], targ.obs_flux[g], yerr=targ.flux_uncert[i], fmt=targ.fmt[i])
+    plt.xlabel('Time', fontsize=15)
+    plt.ylabel('Relative Flux', fontsize=15)
+
+    fig.text(7.5/8.5, 0.5/11., str(count + 1), ha='center', fontsize = 12)
+    fig.tight_layout()
+
+    logger.info("plot_data done")
+    return 0
 
 # sets up photometry for a star and adds aperture to class
 def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, \
@@ -566,7 +562,7 @@ def tests_booleans(targ, boolean_funcs, count, image_region=15, edge_lim=0.015, 
     logger.info("tests_booleans done")
     return plot_data(target, count, image_region)
 
-# outputs dict of functions that finds faulty stars
+# outputs dict of functions that finds faulty stars 
 #   and kics that fall in those functions
 def get_boolean_stars(targets, boolean_funcs, image_region=15, edge_lim=0.015, min_val=500):
     full_dict = {}
@@ -616,6 +612,8 @@ def is_std_better_biggest(old_stds, stds):
 def is_std_better_avg(old_stds, stds):
     return np.average(stds) <= np.average(old_stds)
 
+# helper function for different functions
+# runs find_other_sources under different parameters to change the aperture
 def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, \
                            ntargets=100, extend_region_size=3, remove_excess=4):
     target.find_other_sources(edge_lim=edge_lim, min_val=min_val, ntargets=ntargets, \
@@ -629,7 +627,9 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
     logger.info("run_partial_photometry done")
     return 0
 
-# TODO: gets better apertures
+# TODO: test x number of parameters
+# runs through lists of different parameters, print flux plots and apertures,
+#   then tests if it has only 1 peak, then takes out lowest stddev
 def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000,
                            extend_region_size=3, remove_excess=4, image_region=15):
     count = 0
@@ -644,7 +644,7 @@ def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000,
 
     vals = []
     for val_1 in edge_lims:
-        for val_2 in min_vals:
+        for val_2 in extend_region_size:
             vals.append((val_1, val_2))
 
     results = {}
@@ -658,8 +658,8 @@ def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000,
         for val in vals:
             count += 1
             res = {}
-            run_partial_photometry(target, edge_lim=val[0], min_val=val[1], \
-                                   extend_region_size=extend_region_size, \
+            run_partial_photometry(target, edge_lim=val[0], min_val=min_val, \
+                                   extend_region_size=val[1], \
                                    remove_excess=remove_excess, ntargets=100)
             res["settings"] = val
             res["boolean"] = boolean_func(target)
@@ -689,10 +689,6 @@ def testing():
     logger.info("testing done")
     return
 
-def fake_bool(target):
-    logger.info("fake_bool done")
-    return False
-
 def main():
     logger.info("### starting ###")
     # gets good kics to be put into MAST
@@ -706,7 +702,7 @@ def main():
     # plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
 
     # testing()
-    print_better_apertures("893033", is_large_ap)
+    # print_better_apertures("893033", is_large_ap)
     logger.info("### everything done ###")
 
 if __name__ == "__main__" and __package__ is None:
