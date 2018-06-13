@@ -6,6 +6,7 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
+import lightkurve as lk
 from math import sqrt
 from collections import Counter
 from matplotlib.backends.backend_pdf import PdfPages
@@ -569,7 +570,7 @@ def is_faint(target, limit=5500000):
 # boolean function: always passes every star, for testing
 def fake_bool(target):
     logger.info("fake_bool done")
-    return False
+    return True
 
 # creates plot for one target, assumes already have obs_flux, flux_uncert
 def plot_data(target, count=0):
@@ -699,11 +700,21 @@ def plot_targets(filename, boolean_funcs, targets):
     logger.info("plot_targets done")
     return parsed_targets
 
-def monotonic_arr(arr, is_decreasing):
+def monotonic_arr_new(arr, is_decreasing, diff_flux=0):
+    new_arr = arr if is_decreasing else np.flip(arr, 0)
+    diffs = np.diff(new_arr)
+    length = range(len(diffs))
+    for diff in zip(length, length[1:]):
+        i, j = diff
+        if diffs[i] >= diff_flux and diffs[j] >= diff_flux:
+            return i+1 if is_decreasing else len(arr)-(j+1)
+    return -1 if is_decreasing else 0
+
+def monotonic_arr(arr, is_decreasing, diff_flux=0):
     new_arr = arr if is_decreasing else np.flip(arr, 0)
     diffs = np.diff(new_arr)
     for i, diff in enumerate(diffs):
-        if diff >= 0:
+        if diff >= diff_flux:
             return i+1 if is_decreasing else len(arr)-(i+1)
     return -1 if is_decreasing else 0
 
@@ -732,13 +743,104 @@ def img_to_new_aperture(target, img):
     pass
 
 def recalculate_aperture(target):
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
+    image_region = 15
+
     target.roll_best = np.zeros((4,2))
     for i in range(4):
         g = np.where(target.qs == i)[0]
         wh = np.where(target.times[g] > 54947)
         target.roll_best[i] = target.do_rolltest(g, wh)
     target.do_photometry()
+
     return 0
+
+
+def improve_aperture_2(target, image_region=15):
+    img = target.img
+    len_x = img.shape[1]
+    len_y = img.shape[0]
+    c_j = len_x//2
+    c_i = len_y//2
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
+    len_targ_y, len_targ_x = target.targets.shape
+    row_cuts = []
+    col_cuts = []
+
+    # go through rows
+    for i in range(len_y):
+        targets_i = i+ii-image_region
+        inc = monotonic_arr(img[i,:c_j], is_decreasing=False)
+        if inc != 0:
+            row_cuts.append((i, inc))
+            img[i,:inc] = 0
+            target.targets[targets_i,:(inc+jj-image_region)] = 0
+        dec = monotonic_arr(img[i,(c_j+1):], is_decreasing=True)
+        if dec != -1:
+            real_dec = c_j + 1 + dec
+            row_cuts.append((i, real_dec))
+            img[i,real_dec:] = 0
+            target.targets[targets_i,(real_dec+jj-image_region):] = 0
+
+    # go through cols
+    for j in range(len_x):
+        targets_j = j+jj-image_region
+        inc = monotonic_arr(img[:c_i,j], is_decreasing=False)
+        if inc != 0:
+            col_cuts.append((inc, j))
+            img[:inc,j] = 0
+            target.targets[:(inc+ii-image_region),targets_j] = 0
+        dec = monotonic_arr(img[(c_i+1):,j], is_decreasing=True)
+        if dec != -1:
+            col_cuts.append((inc, j))
+            real_dec = c_i + 1 + dec
+            img[real_dec:,j]=0
+            target.targets[(real_dec+ii-image_region):,targets_j] = 0
+
+    # repeated = list(set(row_cuts).intersection(col_cuts))
+    # print repeated
+
+    # print img[17, 16]
+    # print img[18, 16]
+    # print img[17, 17]
+
+    for row in range(len_y-1):
+        for col in range(len_x-1):
+            if img[row, col] != 0.0 and img[row, col+1] == 0.0 and img[row+1, col] == 0.0:
+                print row, col
+
+
+
+
+
+    recalculate_aperture(target)
+    target.img = np.sum(((target.targets == 1)*target.postcard + \
+                  (target.targets == 1)*100000)
+                 [:,ii-image_region:ii+image_region, \
+                  jj-image_region:jj+image_region], axis=0)
+
+
+
+    return img
+
+def add_backs(target):
+    improve_aperture_2(target)
+    add_back(target, [(18, 16), (17, 17), (18, 17)])
+    improve_aperture_2(target)
+
+
+def add_back(target, arr):
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
+    for val in arr:
+        i, j = val
+        print i, j
+        real_i = i+ii-15
+        real_j = j+jj-15
+        target.targets[real_i, real_j] = 1
+    recalculate_aperture(target)
 
 def improve_aperture(target, image_region=15):
     img = target.img
@@ -753,11 +855,11 @@ def improve_aperture(target, image_region=15):
     # go through rows
     for i in range(len_y):
         targets_i = i+ii-image_region
-        inc = monotonic_arr(img[i,:c_j], is_decreasing=False)
+        inc = monotonic_arr_new(img[i,:c_j], is_decreasing=False)
         if inc != 0:
             img[i,:inc] = 0
             target.targets[targets_i,:(inc+jj-image_region)] = 0
-        dec = monotonic_arr(img[i,(c_j+1):], is_decreasing=True)
+        dec = monotonic_arr_new(img[i,(c_j+1):], is_decreasing=True)
         if dec != -1:
             real_dec = c_j + 1 + dec
             img[i,real_dec:] = 0
@@ -766,11 +868,11 @@ def improve_aperture(target, image_region=15):
     # go through cols
     for j in range(len_x):
         targets_j = j+jj-image_region
-        inc = monotonic_arr(img[:c_i,j], is_decreasing=False)
+        inc = monotonic_arr_new(img[:c_i,j], is_decreasing=False)
         if inc != 0:
             img[:inc,j] = 0
             target.targets[:(inc+ii-image_region),targets_j] = 0
-        dec = monotonic_arr(img[(c_i+1):,j], is_decreasing=True)
+        dec = monotonic_arr_new(img[(c_i+1):,j], is_decreasing=True)
         if dec != -1:
             real_dec = c_i + 1 + dec
             img[real_dec:,j]=0
@@ -779,6 +881,63 @@ def improve_aperture(target, image_region=15):
     recalculate_aperture(target)
 
     return img
+
+def improve_aperture_mask(target, mask, image_region=15):
+    img = target.img
+    len_x = img.shape[1]
+    len_y = img.shape[0]
+    c_j = len_x//2
+    c_i = len_y//2
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
+    len_targ_y, len_targ_x = target.targets.shape
+
+    print mask
+
+    i = 0
+    j = 0
+    for r, row in enumerate(mask):
+        for c, x in enumerate(row):
+            if x==0:
+                i=c+ii-image_region
+                j=r+jj-image_region
+                img[r, c] = 0
+                target.targets[i, j] = 0
+
+    print np.where(img>0, 1, 0)
+
+    # go through rows
+    for i in range(len_y):
+        targets_i = i+ii-image_region
+        inc = monotonic_arr_new(img[i,:c_j], is_decreasing=False)
+        if inc != 0:
+            img[i,:inc] = 0
+            target.targets[targets_i,:(inc+jj-image_region)] = 0
+        dec = monotonic_arr_new(img[i,(c_j+1):], is_decreasing=True)
+        if dec != -1:
+            real_dec = c_j + 1 + dec
+            img[i,real_dec:] = 0
+            target.targets[targets_i,(real_dec+jj-image_region):] = 0
+
+    # go through cols
+    for j in range(len_x):
+        targets_j = j+jj-image_region
+        inc = monotonic_arr_new(img[:c_i,j], is_decreasing=False)
+        if inc != 0:
+            img[:inc,j] = 0
+            target.targets[:(inc+ii-image_region),targets_j] = 0
+        dec = monotonic_arr_new(img[(c_i+1):,j], is_decreasing=True)
+        if dec != -1:
+            real_dec = c_i + 1 + dec
+            img[real_dec:,j]=0
+            target.targets[(real_dec+ii-image_region):,targets_j] = 0
+
+    recalculate_aperture(target)
+
+    print np.where(img>0, 1, 0)
+
+    return img
+
 
 def is_std_better_biggest(old_stds, stds):
     max_i = np.argmax(stds)
@@ -978,18 +1137,33 @@ def testing(targ):
     if target == 1:
         return
 
+    tar = target.target
+    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
+               tar.params['Channel_2'], tar.params['Channel_3']]
+
+    kepprf = lk.KeplerPRF(channel=channel[0], shape=(30, 30), column=15, row=15)
+    prf = kepprf(flux=1000, center_col=30, center_row=30,scale_row=0.9, scale_col=0.9, rotation_angle=0)
+    new = np.where(prf > 3, 1, 0)
+    plt.imshow(prf, origin="lower", vmax=np.percentile(prf, 99))
+
     with PdfPages(targ + "_out.pdf") as pdf:
         plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), ha='center', fontsize = 11)
         pdf.savefig()
-        improve_aperture(target)
+        improve_aperture_mask(target, new)
         plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), ha='center', fontsize = 11)
         pdf.savefig()
         plt.close()
 
+    # print(target.times)
+    # print("EHH")
+    # print(target.obs_flux)
+    # print "OIHFOIEF"
+    # print target.flux_uncert
+
     logger.info("testing done")
-    return 0
+    return target
 
 def main():
     logger.info("### starting ###")
@@ -1005,19 +1179,20 @@ def main():
 
     ## TEMP
 
-    ben_random = ["3100219"
-                  # , "7771531"
+    ben_random = ["8462852"
+                  , "3100219"
+                  , "7771531"
                   # , "9595725"
                   # , "9654240"
                   # , "6691114"
                   # , "7109052"
                   # , "8043142"
-                  , "8544875"
+                  # , "8544875"
                   # , "9152469"
                   # , "9762293"
                   # , "11447772"
                   # , "9210192"
-                  , "8462852"
+                  # , "1161620"
                   ]
 
     ben_kics = ["2694810"
@@ -1063,15 +1238,33 @@ def main():
                  ]
 
     # kics = get_kics("out03.txt")
+    # kics = ["6542321", "2017224", "3745516", "2694810", "3853405", "4863614", "7691547", "8396113"]
     kics = ben_random
 
-    # plot_targets(targets_file, [is_faint_table], get_kics("out03.txt"))
+    # plot_targets(targets_file, [fake_bool], kics)
 
     # for i, targ in enumerate(kics):
     #     print(str(i) + "/" + str(len(kics)) + " new one!")
     #     print_best_apertures(targ)
 
+    # li = []
+    # with open("data/table3.dat", "r") as fin:
+    #     for line in fin:
+    #         data = line.split(" ")
+    #         li.append(data[1])
+    # with open("table3_out.txt", "w") as fout:
+    #     wr = csv.writer(fout)
+    #     for i in li:
+    #         wr.writerow(i)
+
     ## TESTS
+    # with open("out.txt", "w") as f:
+    #     f.write("columns\n")
+    #     wr = csv.writer(f)
+    #     for kic in kics:
+    #         target = testing(kic)
+    #         wr.writerow(target.times + target.obs_flux)
+
     for kic in kics:
         testing(kic)
     logger.info("### everything done ###")
