@@ -756,92 +756,6 @@ def recalculate_aperture(target):
 
     return 0
 
-
-def improve_aperture_2(target, image_region=15):
-    img = target.img
-    len_x = img.shape[1]
-    len_y = img.shape[0]
-    c_j = len_x//2
-    c_i = len_y//2
-    ii, jj = target.center
-    ii, jj = int(ii), int(jj)
-    len_targ_y, len_targ_x = target.targets.shape
-    row_cuts = []
-    col_cuts = []
-
-    # go through rows
-    for i in range(len_y):
-        targets_i = i+ii-image_region
-        inc = monotonic_arr(img[i,:c_j], is_decreasing=False)
-        if inc != 0:
-            row_cuts.append((i, inc))
-            img[i,:inc] = 0
-            target.targets[targets_i,:(inc+jj-image_region)] = 0
-        dec = monotonic_arr(img[i,(c_j+1):], is_decreasing=True)
-        if dec != -1:
-            real_dec = c_j + 1 + dec
-            row_cuts.append((i, real_dec))
-            img[i,real_dec:] = 0
-            target.targets[targets_i,(real_dec+jj-image_region):] = 0
-
-    # go through cols
-    for j in range(len_x):
-        targets_j = j+jj-image_region
-        inc = monotonic_arr(img[:c_i,j], is_decreasing=False)
-        if inc != 0:
-            col_cuts.append((inc, j))
-            img[:inc,j] = 0
-            target.targets[:(inc+ii-image_region),targets_j] = 0
-        dec = monotonic_arr(img[(c_i+1):,j], is_decreasing=True)
-        if dec != -1:
-            col_cuts.append((inc, j))
-            real_dec = c_i + 1 + dec
-            img[real_dec:,j]=0
-            target.targets[(real_dec+ii-image_region):,targets_j] = 0
-
-    # repeated = list(set(row_cuts).intersection(col_cuts))
-    # print repeated
-
-    # print img[17, 16]
-    # print img[18, 16]
-    # print img[17, 17]
-
-    for row in range(len_y-1):
-        for col in range(len_x-1):
-            if img[row, col] != 0.0 and img[row, col+1] == 0.0 and img[row+1, col] == 0.0:
-                print row, col
-
-
-
-
-
-    recalculate_aperture(target)
-    target.img = np.sum(((target.targets == 1)*target.postcard + \
-                  (target.targets == 1)*100000)
-                 [:,ii-image_region:ii+image_region, \
-                  jj-image_region:jj+image_region], axis=0)
-
-
-
-    return img
-
-def add_backs(target):
-    improve_aperture_2(target)
-    add_back(target, [(18, 16), (17, 17), (18, 17)])
-    improve_aperture_2(target)
-
-
-def add_back(target, arr):
-    ii, jj = target.center
-    ii, jj = int(ii), int(jj)
-    for val in arr:
-        i, j = val
-        print i, j
-        real_i = i+ii-15
-        real_j = j+jj-15
-        target.targets[real_i, real_j] = 1
-    recalculate_aperture(target)
-
 def improve_aperture(target, image_region=15):
     img = target.img
     len_x = img.shape[1]
@@ -904,7 +818,8 @@ def improve_aperture_mask(target, mask, image_region=15):
                 img[r, c] = 0
                 target.targets[i, j] = 0
 
-    print np.where(img>0, 1, 0)
+    first = np.where(img>0, 1, 0)
+    print np.subtract(mask, first)
 
     # go through rows
     for i in range(len_y):
@@ -934,7 +849,11 @@ def improve_aperture_mask(target, mask, image_region=15):
 
     recalculate_aperture(target)
 
-    print np.where(img>0, 1, 0)
+    second= np.where(img>0, 1, 0)
+    print np.subtract(first, second)
+
+    print "AHHHH"
+    print np.subtract(mask, second)
 
     return img
 
@@ -1142,9 +1061,8 @@ def testing(targ):
                tar.params['Channel_2'], tar.params['Channel_3']]
 
     kepprf = lk.KeplerPRF(channel=channel[0], shape=(30, 30), column=15, row=15)
-    prf = kepprf(flux=1000, center_col=30, center_row=30,scale_row=0.9, scale_col=0.9, rotation_angle=0)
-    new = np.where(prf > 3, 1, 0)
-    plt.imshow(prf, origin="lower", vmax=np.percentile(prf, 99))
+    prf = kepprf(flux=1000, center_col=30, center_row=30,scale_row=1, scale_col=1, rotation_angle=0)
+    new = np.where(prf > 0.0005*np.max(prf), 1, 0)
 
     with PdfPages(targ + "_out.pdf") as pdf:
         plot_data(target)
