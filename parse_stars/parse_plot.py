@@ -11,7 +11,6 @@ from math import sqrt
 from collections import Counter
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
-
 from utils import *
 
 ## Setup
@@ -99,8 +98,6 @@ def get_good_kids(param_filename, list_kids, param_arr):
     logger.info("get_good_kids done")
     return list_good_kids
 
-#///////////////////
-
 # get all kids from several files
 # assume all kids are unique from each file, assumes first line are fieldnames
 def get_kics_files(list_files):
@@ -154,8 +151,6 @@ def does_path_exists(filename):
             print("Quitting...")
             return True
     return False
-
-#//////////////////////////
 
 # prints array to column in file, splits up files by kids_per_file
 # returns length of array
@@ -510,7 +505,6 @@ def has_close_peaks(target, diff=7, min_factor=1):
     len_y = len(img)
     c_i = len_x//2
     c_j = len_y//2
-    # center_peak = target.img[c_i][c_j]
     if c_i <= diff:
         min_i = 1
         max_i = len_x - 1
@@ -718,29 +712,18 @@ def monotonic_arr(arr, is_decreasing, diff_flux=0):
             return i+1 if is_decreasing else len(arr)-(i+1)
     return -1 if is_decreasing else 0
 
-def remove_nonzeros(arr, is_before):
-    length = arr.shape[0]
-    zeros = np.where(arr <= 5)[0]
-    first = zeros[0]
-    last = zeros[-1]
-    if is_before: new = np.append(np.zeros(first), arr[first:])
-    else: new = np.append(arr[:last], np.zeros(length-last))
-    return new
-
-def improve_aperture_simple(img):
+def img_to_new_aperture(target, img, image_region=15):
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
     len_x = img.shape[1]
     len_y = img.shape[0]
-    c_j = len_x//2
-    c_i = len_y//2
-    for i in range(len_y):
-        print(str(i) + " " + str(np.nonzero(img[i,:])[0]))
-        img[:][i] = np.concatenate((remove_nonzeros(img[i,:(c_j-1)], True), \
-                              img[i,(c_j-1):(c_j+1)], \
-                              remove_nonzeros(img[i,(c_j+1):], False)))
-    return img
 
-def img_to_new_aperture(target, img):
-    pass
+    for i in range(len_y):
+        big_i = i+ii-image_region
+        for j in range(len_x):
+            if img[i, j] == 0:
+                target.targets[big_i, j+jj-image_region] = 0
+    return img
 
 def recalculate_aperture(target):
     ii, jj = target.center
@@ -756,47 +739,55 @@ def recalculate_aperture(target):
 
     return 0
 
-def improve_aperture(target, image_region=15):
+def isolate_star_cycle(target, ii, jj, image_region=15):
     img = target.img
     len_x = img.shape[1]
     len_y = img.shape[0]
     c_j = len_x//2
     c_i = len_y//2
-    ii, jj = target.center
-    ii, jj = int(ii), int(jj)
-    len_targ_y, len_targ_x = target.targets.shape
 
     # go through rows
     for i in range(len_y):
         targets_i = i+ii-image_region
-        inc = monotonic_arr_new(img[i,:c_j], is_decreasing=False)
+        inc = monotonic_arr(img[i,:c_j], is_decreasing=False)
         if inc != 0:
             img[i,:inc] = 0
-            target.targets[targets_i,:(inc+jj-image_region)] = 0
-        dec = monotonic_arr_new(img[i,(c_j+1):], is_decreasing=True)
+        dec = monotonic_arr(img[i,(c_j+1):], is_decreasing=True)
         if dec != -1:
             real_dec = c_j + 1 + dec
             img[i,real_dec:] = 0
-            target.targets[targets_i,(real_dec+jj-image_region):] = 0
 
     # go through cols
     for j in range(len_x):
         targets_j = j+jj-image_region
-        inc = monotonic_arr_new(img[:c_i,j], is_decreasing=False)
+        inc = monotonic_arr(img[:c_i,j], is_decreasing=False)
         if inc != 0:
             img[:inc,j] = 0
-            target.targets[:(inc+ii-image_region),targets_j] = 0
-        dec = monotonic_arr_new(img[(c_i+1):,j], is_decreasing=True)
+        dec = monotonic_arr(img[(c_i+1):,j], is_decreasing=True)
         if dec != -1:
             real_dec = c_i + 1 + dec
             img[real_dec:,j]=0
-            target.targets[(real_dec+ii-image_region):,targets_j] = 0
+
+    return target.img
+
+def improve_aperture(target, image_region=15):
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
+
+    img_save = np.empty_like(target.img)
+    img_save[:] = target.img
+
+    while np.any(np.subtract(img_save, isolate_star_cycle(target, ii, jj, image_region))):
+        img_save = np.empty_like(target.img)
+        img_save[:] = target.img
+
+    img_to_new_aperture(target, target.img, image_region)
 
     recalculate_aperture(target)
 
-    return img
+    return target.img
 
-def improve_aperture_mask(target, mask, image_region=15):
+def improve_aperture_mask(target, mask=None, image_region=15):
     img = target.img
     len_x = img.shape[1]
     len_y = img.shape[0]
@@ -804,19 +795,17 @@ def improve_aperture_mask(target, mask, image_region=15):
     c_i = len_y//2
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
-    len_targ_y, len_targ_x = target.targets.shape
-
-    print mask
 
     i = 0
     j = 0
-    for r, row in enumerate(mask):
-        for c, x in enumerate(row):
-            if x==0:
-                i=c+ii-image_region
-                j=r+jj-image_region
-                img[r, c] = 0
-                target.targets[i, j] = 0
+    if mask != None:
+        for r, row in enumerate(mask):
+            for c, x in enumerate(row):
+                if x==0:
+                    i=c+ii-image_region
+                    j=r+jj-image_region
+                    img[r, c] = 0
+                    target.targets[i, j] = 0
 
     first = np.where(img>0, 1, 0)
     print np.subtract(mask, first)
@@ -856,7 +845,6 @@ def improve_aperture_mask(target, mask, image_region=15):
     print np.subtract(mask, second)
 
     return img
-
 
 def is_std_better_biggest(old_stds, stds):
     max_i = np.argmax(stds)
@@ -1068,19 +1056,13 @@ def testing(targ):
         plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), ha='center', fontsize = 11)
         pdf.savefig()
-        improve_aperture_mask(target, new)
+        improve_aperture(target)
+        # improve_aperture_mask(target, new)
         plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), ha='center', fontsize = 11)
         pdf.savefig()
         plt.close()
 
-    # print(target.times)
-    # print("EHH")
-    # print(target.obs_flux)
-    # print "OIHFOIEF"
-    # print target.flux_uncert
-
-    logger.info("testing done")
     return target
 
 def main():
@@ -1092,11 +1074,9 @@ def main():
     # remove_bright_neighbours_separate()
 
     ## plots list of files with kics using f3
-    # plot_targets(output_file, [fake_bool], ["893033"])
     # plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
 
     ## TEMP
-
     ben_random = ["8462852"
                   , "3100219"
                   , "7771531"
@@ -1155,34 +1135,9 @@ def main():
                  , "1433899"
                  ]
 
-    # kics = get_kics("out03.txt")
-    # kics = ["6542321", "2017224", "3745516", "2694810", "3853405", "4863614", "7691547", "8396113"]
     kics = ben_random
 
-    # plot_targets(targets_file, [fake_bool], kics)
-
-    # for i, targ in enumerate(kics):
-    #     print(str(i) + "/" + str(len(kics)) + " new one!")
-    #     print_best_apertures(targ)
-
-    # li = []
-    # with open("data/table3.dat", "r") as fin:
-    #     for line in fin:
-    #         data = line.split(" ")
-    #         li.append(data[1])
-    # with open("table3_out.txt", "w") as fout:
-    #     wr = csv.writer(fout)
-    #     for i in li:
-    #         wr.writerow(i)
-
     ## TESTS
-    # with open("out.txt", "w") as f:
-    #     f.write("columns\n")
-    #     wr = csv.writer(f)
-    #     for kic in kics:
-    #         target = testing(kic)
-    #         wr.writerow(target.times + target.obs_flux)
-
     for kic in kics:
         testing(kic)
     logger.info("### everything done ###")
