@@ -11,7 +11,6 @@ from math import sqrt
 from collections import Counter
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
-from utils import *
 
 ## Setup
 f3_location = "/home/user/Desktop/astrolab/solar_data/parse_stars/f3"
@@ -21,22 +20,21 @@ output_folder = "./tests/"
 ## Input Files to change
 filename_periods = "./data/Table_Periodic.txt"
 filename_nonperiods = "./data/Table_Non_Periodic.txt"
-list_filenames = [filename_periods]
-stellar_param_filename = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
+filename_stellar_params = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
 
 kepmag_file_prefix = "./data/kepler_fov_search"
 
-## Output Files
+## Output Files to change
 file_name = "good_kids"
 
-output_file = output_folder + file_name + "_plot.pdf"
+## Output Files
 log_file = output_folder + file_name + ".log"
+output_file = output_folder + file_name + "_plot.pdf"
 parsed_kids_filename = results_folder + file_name + "_parsed.txt"
 single_parsed_kids_filename = results_folder + file_name + "_single.txt"
 batch_parsed_kids_filename = results_folder + file_name + "_batch.txt"
 
 targets_file = single_parsed_kids_filename
-targets_files = [targets_file]
 
 def set_filenames_based_on_folders(data_folder="./data/"):
     targets_files_temp = [data_folder + x.split('.')[0] + ".txt"
@@ -66,70 +64,71 @@ logger.addHandler(fh)
 
 # checks if given kids have data from q1-17 kepler targets
 # assume all kids are unique and all data exists
-def get_existing_kids(param_filename, list_kids):
-    list_existing_kids = []
-    with open(param_filename) as f_param:
-        for line in f_param:
-            curr_param_kid = line.strip().split(' ')[0]
-            for kids_i in range(len(list_kids)):
-                if curr_param_kid == list_kids[kids_i]:
-                    list_existing_kids.append(curr_param_kid)
+def get_existing_kids(arr1, arr2):
+    list_existing_kids = set(arr1).intersection(arr2)
     logger.info("get_existing_kids done")
     return list_existing_kids
 
 # checks if specific parameters exists
 # WARNING: no way to separate split string by spaces and detect no data
-def get_good_kids(param_filename, list_kids, param_arr):
-    list_good_kids = []
+def get_good_existing_kids(filename, list_kids, param_arr):
+    list_params_kids = []
     exists_good_params = True
-    with open(param_filename) as f_param:
-        for line in f_param:
+    with open(filename) as f:
+        for line in f:
             curr_params = list(filter(None, line.strip().split(' ')))
-            curr_param_kid = curr_params[0]
-            for kids_i in range(len(list_kids)):
-                if curr_param_kid == list_kids[kids_i]:
-                    for param_i in param_arr:
-                        if curr_params[param_i] == '':
-                            exists_good_params = False
-                            break
-                    if exists_good_params:
-                        list_good_kids.append(curr_param_kid)
-                    exists_good_params = True
-    logger.info("get_good_kids done")
-    return list_good_kids
+            curr_params_kid = curr_params[0]
+            for param_i in param_arr:
+                if curr_params[param_i] == '':
+                    exists_good_params = False
+                    break
+            if exists_good_params:
+                list_params_kids.append(curr_param_kid)
+                exists_good_params = True
+    list_good_existing_kids = set(list_kids).intersection(list_params_kids)
+    logger.info("get_good_existing_kids done")
+    return list_good_existing_kids
+
+def get_good_kids(filename, list_kids):
+    pass
 
 # get all kids from several files
 # assume all kids are unique from each file, assumes first line are fieldnames
-def get_kics_files(list_files):
-    kid_periods = []
+def get_kics_files(list_files, sep=',', skip_rows=1):
+    all_kics = []
     for files_i in range(len(list_files)):
-        with open(list_files[files_i]) as f_periods:
-            next(f_periods)
-            reader = csv.reader(f_periods)
+        with open(list_files[files_i]) as f:
+            for _ in range(skip_rows):
+                next(f)
+            reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
             for row in reader:
                 if row:
-                    kid_periods.append(row[0])
+                    all_kics.append(row[0])
     logger.info("get_kics_files done")
-    return(kid_periods)
+    return all_kics
 
 # get list of kics from a file where kic is first of a column
-def get_kics(filename):
+def get_kics(filename, sep=',', skip_rows=0):
     all_kics = []
     with open(filename) as f:
-        reader = csv.reader(f)
+        for _ in range(skip_rows):
+            next(f)
+        reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
         for row in reader:
             all_kics.append(row[0])
     logger.info("get_kics done")
     return all_kics
 
 # get m kics for every nth kic
-def get_nth_kic(fin, n, m):
+def get_nth_kic(fin, n, m, skip_rows=0):
     kics = []
     start = 0
     if m > n:
         n, m = m, n
     with open(fin, 'r') as f:
         reader = csv.reader(f)
+        for _ in skip_rows:
+            next(f)
         for i, row in enumerate(reader, 1):
             if start < m:
                 kics.append(row[0])
@@ -154,7 +153,7 @@ def does_path_exists(filename):
 
 # prints array to column in file, splits up files by kids_per_file
 # returns length of array
-def array_to_file(arr, filename, kids_per_file=9999):
+def array_to_file(arr, filename, kids_per_file=9999, bypass_prompt=True):
     arr_i = 0
     total_kids = len(arr)
     output_files_i = 0
@@ -162,7 +161,7 @@ def array_to_file(arr, filename, kids_per_file=9999):
     remainder_of_files = total_kids%kids_per_file
     good_kids_filename = filename + "_" + str(output_files_i) + ".txt"
 
-    if does_path_exists(filename):
+    if not bypass_prompt and does_path_exists(filename):
         return 1
 
     for output_files_i in range(number_of_files):
@@ -191,8 +190,8 @@ def does_path_exists(filename):
 
 # prints array to each row in filename (good for kics)
 def simple_array_to_file(filename, arr):
-    with open(filename, 'w') as write_f:
-        writer = csv.writer(write_f, delimiter=',', lineterminator='\n')
+    with open(filename, 'w') as f:
+        writer = csv.writer(f, delimiter=',', lineterminator='\n')
         for i in range(len(arr)):
             writer.writerow([arr[i]])
     return 0
@@ -206,7 +205,7 @@ def dict_to_file(filename, dicts, keys=None):
     if does_path_exists(filename):
         return 1
     if keys == None:
-        keys = get_dic_keys(dicts[0])[1:]
+        keys = [key for key in dicts[0]][1:]
     with open(filename, 'w') as write_f:
         for key_i in range(len(keys) - 1):
             write_f.write([keys[key_i]] + ",")
@@ -223,7 +222,7 @@ def dicts_to_file(filename, dicts, keys=None):
     if does_path_exists(filename):
         return 1
     if keys == None:
-        keys = get_dic_keys(dicts[0])[1:]
+        keys = [key for key in dicts[0]][1:]
     with open(filename, 'w') as write_f:
         for i in range(len(dicts)):
             write_f.write("input: " + dicts[i]["Kepler_ID"] + "\n")
@@ -503,44 +502,29 @@ def has_close_peaks(target, diff=7, min_factor=1):
     img = target.img
     len_x = len(img[0])
     len_y = len(img)
-    c_i = len_x//2
-    c_j = len_y//2
-    if c_i <= diff:
+    c_i = len_y//2
+    c_j = len_x//2
+    if c_i <= diff or diff <= 0:
         min_i = 1
-        max_i = len_x - 1
+        max_i = len_y - 1
     else:
         min_i = c_i - diff
         max_i = c_i + diff
-    if c_j <= diff:
+    if c_j <= diff or diff <= 0:
         min_j = 1
-        max_j = len_y - 1
+        max_j = len_x - 1
     else:
         min_j = c_j - diff
         max_j = c_j + diff
     for i in range(min_i, max_i):
         for j in range(min_j, max_j):
-            if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
+            if i-1 == c_i-1 or j-1 == 14 or i+1 == c_i+1 or j+1 == 16:
                 continue
             if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], \
                        img[i-1][j], img[i+1][j], min_factor):
                 logger.info("has_close_peaks True")
                 return True
     logger.info("has_close_peaks False")
-    return False
-
-# boolean function: determines if aperture has more than one bright peak
-def has_peaks(target, min_factor=1):
-    img = target.img
-    # center_peak = img[len(img[0])//2][len(img)//2]
-    for i in range(2, len(img) - 2):
-        for j in range(2, len(img[i]) - 2):
-            if i-1 == 14 or j-1 == 14 or i+1 == 16 or j+1 == 16:
-                continue
-            if is_peak(img, img[i][j], img[i][j-1], img[i][j+1], \
-                       img[i-1][j], img[i+1][j], min_factor):
-                logger.info("has_peaks True")
-                return True
-    logger.info("has_peaks False")
     return False
 
 def is_faint(target, limit=5500000):
@@ -649,7 +633,6 @@ def tests_booleans(targ, boolean_funcs, count, \
 #   and kics that fall in those functions
 def get_boolean_stars(targets, boolean_funcs, \
                       edge_lim=0.015, min_val=500, ntargets=100):
-
     full_dict = {}
     full_dict["good"] = []
     for boolean_func in boolean_funcs:
@@ -694,7 +677,7 @@ def plot_targets(filename, boolean_funcs, targets):
     logger.info("plot_targets done")
     return parsed_targets
 
-def monotonic_arr_new(arr, is_decreasing, diff_flux=0):
+def monotonic_arr_relaxed(arr, is_decreasing, diff_flux=0):
     new_arr = arr if is_decreasing else np.flip(arr, 0)
     diffs = np.diff(new_arr)
     length = range(len(diffs))
@@ -704,7 +687,7 @@ def monotonic_arr_new(arr, is_decreasing, diff_flux=0):
             return i+1 if is_decreasing else len(arr)-(j+1)
     return -1 if is_decreasing else 0
 
-def monotonic_arr(arr, is_decreasing, diff_flux=0):
+def monotonic_arr_strict(arr, is_decreasing, diff_flux=0):
     new_arr = arr if is_decreasing else np.flip(arr, 0)
     diffs = np.diff(new_arr)
     for i, diff in enumerate(diffs):
@@ -713,6 +696,8 @@ def monotonic_arr(arr, is_decreasing, diff_flux=0):
     return -1 if is_decreasing else 0
 
 def img_to_new_aperture(target, img, image_region=15):
+    target.img = img
+
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
     len_x = img.shape[1]
@@ -728,7 +713,6 @@ def img_to_new_aperture(target, img, image_region=15):
 def recalculate_aperture(target):
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
-    image_region = 15
 
     target.roll_best = np.zeros((4,2))
     for i in range(4):
@@ -739,8 +723,7 @@ def recalculate_aperture(target):
 
     return 0
 
-def isolate_star_cycle(target, ii, jj, image_region=15):
-    img = target.img
+def isolate_star_cycle(img, ii, jj, image_region=15):
     len_x = img.shape[1]
     len_y = img.shape[0]
     c_j = len_x//2
@@ -749,10 +732,10 @@ def isolate_star_cycle(target, ii, jj, image_region=15):
     # go through rows
     for i in range(len_y):
         targets_i = i+ii-image_region
-        inc = monotonic_arr(img[i,:c_j], is_decreasing=False)
+        inc = monotonic_arr_relaxed(img[i,:c_j], is_decreasing=False)
         if inc != 0:
             img[i,:inc] = 0
-        dec = monotonic_arr(img[i,(c_j+1):], is_decreasing=True)
+        dec = monotonic_arr_relaxed(img[i,(c_j+1):], is_decreasing=True)
         if dec != -1:
             real_dec = c_j + 1 + dec
             img[i,real_dec:] = 0
@@ -760,91 +743,94 @@ def isolate_star_cycle(target, ii, jj, image_region=15):
     # go through cols
     for j in range(len_x):
         targets_j = j+jj-image_region
-        inc = monotonic_arr(img[:c_i,j], is_decreasing=False)
+        inc = monotonic_arr_relaxed(img[:c_i,j], is_decreasing=False)
         if inc != 0:
             img[:inc,j] = 0
-        dec = monotonic_arr(img[(c_i+1):,j], is_decreasing=True)
+        dec = monotonic_arr_relaxed(img[(c_i+1):,j], is_decreasing=True)
         if dec != -1:
             real_dec = c_i + 1 + dec
             img[real_dec:,j]=0
 
-    return target.img
+    return img
 
-def improve_aperture(target, image_region=15):
+def improve_aperture(target, mask=None, image_region=15):
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
 
+    run_cycle = True
     img_save = np.empty_like(target.img)
     img_save[:] = target.img
 
-    while np.any(np.subtract(img_save, isolate_star_cycle(target, ii, jj, image_region))):
-        img_save = np.empty_like(target.img)
-        img_save[:] = target.img
+    if mask is not None or np.any(mask):
+        img_save = np.multiply(mask, target.img)
 
-    img_to_new_aperture(target, target.img, image_region)
+    while run_cycle:
+        img_cycle = isolate_star_cycle(img_save, ii, jj, image_region)
+        run_cycle = np.any(np.subtract(img_save, img_cycle))
+        img_save = img_cycle
 
+    img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
 
     return target.img
 
-def improve_aperture_mask(target, mask=None, image_region=15):
-    img = target.img
-    len_x = img.shape[1]
-    len_y = img.shape[0]
-    c_j = len_x//2
-    c_i = len_y//2
-    ii, jj = target.center
-    ii, jj = int(ii), int(jj)
+def calculate_better_aperture(targ, mask_factor=0.001, image_region=15):
+    target = run_photometry(targ)
+    if target == 1:
+        return
 
-    i = 0
-    j = 0
-    if mask != None:
-        for r, row in enumerate(mask):
-            for c, x in enumerate(row):
-                if x==0:
-                    i=c+ii-image_region
-                    j=r+jj-image_region
-                    img[r, c] = 0
-                    target.targets[i, j] = 0
+    tar = target.target
+    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
+               tar.params['Channel_2'], tar.params['Channel_3']]
 
-    first = np.where(img>0, 1, 0)
-    print np.subtract(mask, first)
+    kepprf = lk.KeplerPRF(channel=channel[0], \
+                          shape=(image_region*2, image_region*2), \
+                          column=image_region, row=image_region)
+    prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
+                 scale_row=1, scale_col=1, rotation_angle=0)
+    mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
+    improve_aperture(target, mask, image_region)
+    return target
 
-    # go through rows
-    for i in range(len_y):
-        targets_i = i+ii-image_region
-        inc = monotonic_arr_new(img[i,:c_j], is_decreasing=False)
-        if inc != 0:
-            img[i,:inc] = 0
-            target.targets[targets_i,:(inc+jj-image_region)] = 0
-        dec = monotonic_arr_new(img[i,(c_j+1):], is_decreasing=True)
-        if dec != -1:
-            real_dec = c_j + 1 + dec
-            img[i,real_dec:] = 0
-            target.targets[targets_i,(real_dec+jj-image_region):] = 0
+def print_better_aperture(targ, mask_factor=0.001, image_region=15, fout="./"):
+    target = run_photometry(targ)
+    if target == 1:
+        return
 
-    # go through cols
-    for j in range(len_x):
-        targets_j = j+jj-image_region
-        inc = monotonic_arr_new(img[:c_i,j], is_decreasing=False)
-        if inc != 0:
-            img[:inc,j] = 0
-            target.targets[:(inc+ii-image_region),targets_j] = 0
-        dec = monotonic_arr_new(img[(c_i+1):,j], is_decreasing=True)
-        if dec != -1:
-            real_dec = c_i + 1 + dec
-            img[real_dec:,j]=0
-            target.targets[(real_dec+ii-image_region):,targets_j] = 0
+    tar = target.target
+    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
+               tar.params['Channel_2'], tar.params['Channel_3']]
 
-    recalculate_aperture(target)
+    kepprf = lk.KeplerPRF(channel=channel[0], \
+                          shape=(image_region*2, image_region*2), \
+                          column=image_region, row=image_region)
+    prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
+                 scale_row=1, scale_col=1, rotation_angle=0)
+    mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
 
-    second= np.where(img>0, 1, 0)
-    print np.subtract(first, second)
+    with PdfPages(fout + targ + "_out.pdf") as pdf:
+        plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close()
+        improve_aperture(target, mask, image_region)
+        plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close()
 
-    print "AHHHH"
-    print np.subtract(mask, second)
+    return target
 
-    return img
+def print_lc_improved_aperture(kics, fout, image_region=15):
+    with open(fout, "w") as f:
+        writer = csv.writer(f, delimiter=',', lineterminator='\n')
+        for kic in kics:
+            target = calculate_better_aperture(kic, image_region=image_region)
+            arr = np.concatenate([np.asarray([kic]), target.times, target.obs_flux, target.flux_uncert, target.img.flatten()])
+            writer.writerow(arr)
+    return 0
 
 def is_std_better_biggest(old_stds, stds):
     max_i = np.argmax(stds)
@@ -882,7 +868,9 @@ def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000, \
             run_partial_photometry(target, edge_lim=val[0], min_val=val[1], \
                                    extend_region_size=val[2], \
                                    remove_excess=val[3], ntargets=100)
-            res["settings"] = "edge: " + str(val[0]) + " min: " + str(val[1]) + " region: " + str(val[2]) + " excess: " + str(val[3])
+            res["settings"] = "edge: " + str(val[0]) + " min: " + \
+                              str(val[1]) + " region: " + str(val[2]) + \
+                              " excess: " + str(val[3])
             res["boolean"] = boolean_func(target)
             res["is_avg"] = is_std_better_avg(old_stds, target.flux_uncert)
             res["is_most"] = is_std_better_biggest(old_stds, target.flux_uncert)
@@ -901,7 +889,7 @@ def print_best_apertures(targ, edge_lim=0.015, min_val=5000, \
     target = photometry.star(targ)
     target.make_postcard()
 
-    best_params = (edge_lim, min_val, extend_region_size, remove_excess)
+    best_pars = (edge_lim, min_val, extend_region_size, remove_excess)
     edge_lims = np.arange(edge_lim - 0.010, edge_lim + 0.025, 0.01)
     min_vals = np.arange(min_val - 2000, min_val + 2000, 1000)
     region_sizes = np.arange(1, 3)
@@ -910,7 +898,8 @@ def print_best_apertures(targ, edge_lim=0.015, min_val=5000, \
     single_results = []
     all_vals = []
 
-    for v0, v1, v2, v3 in itertools.product(edge_lims, min_vals, region_sizes, excesses):
+    for v0, v1, v2, v3 in itertools.product(edge_lims, min_vals, \
+                                            region_sizes, excesses):
         all_vals.append((v0, v1, v2, v3))
 
     with PdfPages(targ + "_plot_1.pdf") as pdf, \
@@ -920,9 +909,9 @@ def print_best_apertures(targ, edge_lim=0.015, min_val=5000, \
                               ntargets=100) == 1:
             return 1
 
-        best_uncert = target.flux_uncert
+        best_unc = target.flux_uncert
         plot_data(target)
-        plt.gcf().text(4/8.5, 1/11., str(best_params), ha='center', fontsize = 11)
+        plt.gcf().text(4/8.5, 1/11., str(best_pars), ha='center', fontsize = 11)
         pdf.savefig()
         pdf2.savefig()
         plt.close()
@@ -935,8 +924,8 @@ def print_best_apertures(targ, edge_lim=0.015, min_val=5000, \
                 continue
             res["settings"] = vals
             res["has_peaks"] = has_peaks(target, min_factor)
-            res["is_avg"] = is_std_better_avg(best_uncert, target.flux_uncert)
-            res["is_most"] = is_std_better_biggest(best_uncert, target.flux_uncert)
+            res["is_avg"] = is_std_better_avg(best_unc, target.flux_uncert)
+            res["is_most"] = is_std_better_biggest(best_unc, target.flux_uncert)
             plot_data(target)
             plt.gcf().text(4/8.5, 1/11., str(res), ha='center', fontsize = 11)
             pdf2.savefig()
@@ -945,23 +934,25 @@ def print_best_apertures(targ, edge_lim=0.015, min_val=5000, \
                 single_results.append((np.average(target.flux_uncert), vals))
 
         if len(single_results) != 0:
-            best_uncert, best_params = single_results[single_results.index(min(single_results))]
+            best_unc, best_pars = single_results\
+                                     [single_results.index(min(single_results))]
 
-        if run_partial_photometry(target, edge_lim=best_params[0], \
-                                  min_val=best_params[1], \
-                                  extend_region_size=best_params[2], \
-                                  remove_excess=best_params[3], \
+        if run_partial_photometry(target, edge_lim=best_pars[0], \
+                                  min_val=best_pars[1], \
+                                  extend_region_size=best_pars[2], \
+                                  remove_excess=best_pars[3], \
                                   ntargets=100) == 1:
             return 1
         plot_data(target)
-        plt.gcf().text(4/8.5, 1/11., str((best_params, best_uncert)), ha='center', fontsize = 11)
+        plt.gcf().text(4/8.5, 1/11., str((best_pars, best_unc)), \
+                       ha='center', fontsize = 11)
         pdf.savefig()
         pdf2.savefig()
         plt.close()
     logger.info("get_best_apertures done")
     return 0
 
-def is_faint_table(target, min_kepmag=15, table_file=stellar_param_filename):
+def is_faint_table(target, min_kepmag=15, table_file=filename_stellar_params):
     with open(table_file) as input_f:
         curr_line = input_f.readline().strip()
         if curr_line[:13] == "Input line 1:": #id line
@@ -997,7 +988,7 @@ i_SDSS,z_SDSS,ug_SDSS,gr_SDSS,gi_SDSS
 
 """
 
-def get_table_params(kics, params, fout, table_file=stellar_param_filename):
+def get_table_params(kics, params, fout, table_file=filename_stellar_params):
     if "Kepler_ID" not in params:
         params = ["Kepler_ID"] + params
     params_list = []
@@ -1039,58 +1030,36 @@ def get_mast_params(target, params):
     return
 
 def testing(targ):
-
-    target = run_photometry(targ)
-    if target == 1:
-        return
-
-    tar = target.target
-    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
-               tar.params['Channel_2'], tar.params['Channel_3']]
-
-    kepprf = lk.KeplerPRF(channel=channel[0], shape=(30, 30), column=15, row=15)
-    prf = kepprf(flux=1000, center_col=30, center_row=30,scale_row=1, scale_col=1, rotation_angle=0)
-    new = np.where(prf > 0.0005*np.max(prf), 1, 0)
-
-    with PdfPages(targ + "_out.pdf") as pdf:
-        plot_data(target)
-        plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), ha='center', fontsize = 11)
-        pdf.savefig()
-        improve_aperture(target)
-        # improve_aperture_mask(target, new)
-        plot_data(target)
-        plt.gcf().text(4/8.5, 1/11., str(np.average(target.flux_uncert)), ha='center', fontsize = 11)
-        pdf.savefig()
-        plt.close()
-
-    return target
+    pass
 
 def main():
     logger.info("### starting ###")
     ## gets good kics to be put into MAST
-    # array_to_file(get_good_kids(stellar_param_filename, get_kics_files(list_filenames)))
+    # array_to_file(get_good_existing_kids(filename_stellar_params, get_kics(filename_periods)))
 
     ## uses MAST results to get stars without neighbours
     # remove_bright_neighbours_separate()
 
     ## plots list of files with kics using f3
-    # plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file))
+    # plot_targets(targets_file, [is_large_ap, has_peaks], get_kics(targets_file, ' ', 0))
+
+    print_lc_improved_aperture(get_kics(filename_stellar_params, ' ', 0), "out.csv")
 
     ## TEMP
     ben_random = ["8462852"
                   , "3100219"
                   , "7771531"
-                  # , "9595725"
-                  # , "9654240"
-                  # , "6691114"
-                  # , "7109052"
-                  # , "8043142"
-                  # , "8544875"
-                  # , "9152469"
-                  # , "9762293"
-                  # , "11447772"
-                  # , "9210192"
-                  # , "1161620"
+                  , "9595725"
+                  , "9654240"
+                  , "6691114"
+                  , "7109052"
+                  , "8043142"
+                  , "8544875"
+                  , "9152469"
+                  , "9762293"
+                  , "11447772"
+                  , "9210192"
+                  , "1161620"
                   ]
 
     ben_kics = ["2694810"
@@ -1135,11 +1104,11 @@ def main():
                  , "1433899"
                  ]
 
-    kics = ben_random
-
     ## TESTS
-    for kic in kics:
-        testing(kic)
+
+
+    # for kic in kics:
+         # testing(kic)
     logger.info("### everything done ###")
     return 0
 
