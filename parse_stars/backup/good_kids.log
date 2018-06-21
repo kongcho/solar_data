@@ -1,0 +1,7 @@
+INFO:root:get_kids done
+INFO:root:get_good_kids done
+INFO:root:34030 entries in 4 files
+INFO:root:array_to_file done
+INFO:root:printed 28987 kids with no neighbours
+INFO:root:printed 5040 kids with neighbours
+INFO:root:remove_bright_neighbours_separate done
