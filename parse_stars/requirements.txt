@@ -1,0 +1,8 @@
+numpy==1.13.3
+matplotlib==2.1.0
+scipy==1.0.0
+astropy==2.0.2
+mahotas==1.4.4
+lightkurve==1.0b5
+git+https://github.com/dfm/kplr.git
+
