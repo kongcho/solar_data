@@ -681,7 +681,7 @@ def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
     for start_i in range(relax_pixels):
         lengths.append(length[start_i:])
     for i, diff in enumerate(zip(*lengths)):
-        if all(diffs[list(diff)] >= diff_flux) and not (arr[i] == 0 and all(arr[[i-1, i+1]] != 0)):
+        if all(diffs[list(diff)] > diff_flux) and not (arr[i] == 0 and all(arr[[i-1, i+1]] != 0)):
             return diff[0] if is_decreasing else len(arr)-(diff[-1]+1)
     return -1 if is_decreasing else 0
 
@@ -758,7 +758,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
         img_cycle = np.empty_like(img_save)
         img_cycle[:] = img_save
         if has_close_peaks(target, 100, 0.8):
-            img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, relax_pixels)
+            img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, 0)
         else:
             img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, relax_pixels)
         run_cycle = np.any(np.subtract(img_save, img_cycle))
@@ -1099,9 +1099,9 @@ def main():
     kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544"]
     print_lc_improved_aperture(kics, "out.csv")
 
-    # for kic in kics:
-    #     np.set_printoptions(linewidth=1000)
-    #     print_better_aperture(kic)
+    for kic in kics:
+        np.set_printoptions(linewidth=1000)
+        print_better_aperture(kic)
     logger.info("### everything done ###")
     return 0
 
