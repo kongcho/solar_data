@@ -817,7 +817,7 @@ def print_lc_improved_aperture(kics, fout, image_region=15):
     with open(fout, "w") as f:
         writer = csv.writer(f, delimiter=',', lineterminator='\n')
         for kic in kics:
-            target = run_photometry(targ)
+            target = run_photometry(kic)
             if target == 1:
                 return
             calculate_better_aperture(target, image_region=image_region)
