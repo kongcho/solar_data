@@ -1,0 +1,8 @@
+# exclude f3, ffidata
+# exclude large result files
+# exclude test files
+
+parse_stars/f3
+parse_stars/tests
+parse_stars/ffidata
+parse_stars/venv

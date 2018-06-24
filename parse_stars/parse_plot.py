@@ -579,8 +579,12 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
 def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
                            extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
 
-    target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
+    try:
+        target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
                               remove_excess, plot_flag, plot_window)
+    except:
+        logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
+        return 1
 
     target.data_for_target(do_roll=True, ignore_bright=0)
 
@@ -616,13 +620,15 @@ def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets
 # helper function for plot_targets that sets up photometry of a star
 #   runs a photometry and tests a list of boolean functions on it
 #   then creates a plot for it with plot_data
-def tests_booleans(targ, boolean_funcs, count, edge_lim=0.015, min_val=5000, ntargets=100):
+def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
+                   min_val=5000, ntargets=100):
     target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
     if target == 1:
         return 1
     for boolean in boolean_funcs:
-        # TODO: not for picking out bad ones
-        if not boolean(target):
+        if pick_bad and not boolean(target):
+            return 1
+        elif boolean(target):
             return 1
     logger.info("tests_booleans done")
     return plot_data(target, count)
@@ -649,7 +655,7 @@ def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntarg
     return full_dict
 
 # plots list of targets to a filename if the boolean function is true
-def plot_targets(filename, boolean_funcs, targets):
+def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     filename = filename.rsplit(".", 1)[0]
     total = len(targets)
     count = 1
@@ -661,7 +667,7 @@ def plot_targets(filename, boolean_funcs, targets):
     with PdfPages(output_file) as pdf:
         for targ in targets:
             logger.info("# " + targ)
-            target = tests_booleans(targ, boolean_funcs, count)
+            target = tests_booleans(targ, boolean_funcs, count, pick_bad)
             if target != 1:
                 plt.gcf().text(4/8.5, 1/11., "" , ha='center', fontsize = 12)
                 parsed_targets.append(target)
@@ -747,6 +753,9 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
 
+    if not np.any(target.img):
+        return target
+
     run_cycle = True
     img_save = np.empty_like(target.img)
     img_save[:] = target.img
@@ -766,6 +775,8 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
 
     img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
+
+    print np.where(target.img != 0, 1, 0)
 
     logger.info("improve_aperture done")
     return target.img
@@ -1096,8 +1107,10 @@ def main():
 
     ## TESTS
 
-    kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544"]
-    print_lc_improved_aperture(kics, "out.csv")
+    # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544"]
+    # kics = ["757076", "3124279", "8381999"]
+    kics = get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0)
+    # print_lc_improved_aperture(kics, "out.csv")
 
     for kic in kics:
         np.set_printoptions(linewidth=1000)
