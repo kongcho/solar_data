@@ -4,13 +4,18 @@ import os
 import logging
 import itertools
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gs
-import lightkurve as lk
 from math import sqrt
 from collections import Counter
-from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
+
+import matplotlib
+if os.environ.get('DISPLAY','') == "":
+    logger.info("Using non-interactive Agg backend")
+    matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
+from matplotlib.backends.backend_pdf import PdfPages
+import lightkurve as lk
 
 ## Setup
 f3_location = "/home/user/Desktop/astrolab/solar_data/parse_stars/f3"
@@ -47,7 +52,7 @@ def set_filenames_based_on_folders(data_folder="./data/"):
 ## Logging
 # removes warning messages from kplr that is propagated to f3
 
-format_str = '%(asctime)s [%(levelname)s]\t%(name)s: %(message)s' #%(module)s
+format_str = '%(asctime)s [%(levelname)s]\t%(module)s\t%(name)s: %(message)s'
 formatter = logging.Formatter(format_str)
 
 logging.basicConfig(stream=sys.stderr, level=logging.ERROR, format=format_str)
@@ -582,8 +587,9 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
     try:
         target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
                               remove_excess, plot_flag, plot_window)
-    except:
+    except Exception as e:
         logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
+        logger.error(e.message)
         return 1
 
     target.data_for_target(do_roll=True, ignore_bright=0)
@@ -612,7 +618,13 @@ def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets
                    extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
-    target.make_postcard()
+
+    try:
+        target.make_postcard()
+    except Exception as e:
+        logger.info("run_photometry unsuccessful: %s" % target.kic)
+        logger.error(e.message)
+        return 1
 
     return run_partial_photometry(target, image_region, edge_lim, min_val, ntargets, \
                                   extend_region_size, remove_excess, plot_window, plot_flag)
@@ -1048,7 +1060,7 @@ def main():
 
     ## TEMP
     ben_random = ["8462852"
-                 , "3100219"
+                  , "3100219"
                   , "7771531"
                   , "9595725"
                   , "9654240"
@@ -1107,9 +1119,8 @@ def main():
 
     ## TESTS
 
-    # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544"]
-    # kics = ["757076", "3124279", "8381999"]
-    kics = get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0)
+    # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
+    kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
 
     for kic in kics:
