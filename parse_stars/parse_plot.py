@@ -10,7 +10,7 @@ from datetime import datetime
 
 import matplotlib
 if os.environ.get('DISPLAY','') == "":
-    logger.info("Using non-interactive Agg backend")
+    print("Using non-interactive Agg backend")
     matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
@@ -502,8 +502,8 @@ def has_close_peaks(target, diff=7, min_factor=1):
     else:
         min_j = c_j - diff
         max_j = c_j + diff
-    avoids_i = range(c_i-1, c_i+2)
-    avoids_j = range(c_j-1, c_j+2)
+    avoids_i = [] #range(c_i-1, c_i+2)
+    avoids_j = [] #range(c_j-1, c_j+2)
     for i in range(min_i, max_i):
         for j in range(min_j, max_j):
             if i in avoids_i and j in avoids_j:
@@ -778,8 +778,8 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
     while run_cycle:
         img_cycle = np.empty_like(img_save)
         img_cycle[:] = img_save
-        if has_close_peaks(target, 100, 0.8):
-            img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, 0)
+        if has_close_peaks(target, 100, 1.5):
+            img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, 1)
         else:
             img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, relax_pixels)
         run_cycle = np.any(np.subtract(img_save, img_cycle))
@@ -787,8 +787,6 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
 
     img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
-
-    print np.where(target.img != 0, 1, 0)
 
     logger.info("improve_aperture done")
     return target.img
@@ -826,7 +824,7 @@ def print_better_aperture(targ, mask_factor=0.001, image_region=15, fout="./"):
                        ha='center', fontsize = 11)
         pdf.savefig()
         plt.close()
-        improve_aperture(target, mask, image_region)
+        improve_aperture(target, mask, image_region, relax_pixels=2)
         plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
@@ -1120,8 +1118,9 @@ def main():
     ## TESTS
 
     # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
-    kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
+    # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
+    kics = ["8462852", "2574945", "3124279", "8381999"]
 
     for kic in kics:
         np.set_printoptions(linewidth=1000)
