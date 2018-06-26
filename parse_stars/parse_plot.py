@@ -588,7 +588,7 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
                               remove_excess, plot_flag, plot_window)
     except Exception as e:
         logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
-        logger.error(e.message)
+        logger.error(e)
         return 1
 
     target.data_for_target(do_roll=True, ignore_bright=0)
@@ -705,6 +705,7 @@ def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [any(others)
                 , is_n_bools(others, 2, lambda x: x == 0)
+                , all(x < xi0j0 for x in others)
                 , xi0j0 >= min_bright
                 ]
     return all(booleans)
@@ -815,7 +816,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
         run_cycle = np.any(np.subtract(img_save, img_cycle))
         img_save = img_cycle
 
-    remove_second_star(img_save, 0.5)
+    remove_second_star(img_save, 0.7)
 
     img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
@@ -1074,7 +1075,8 @@ def get_mast_params(target, params):
     return
 
 def testing(targ):
-    pass
+    img = np.array(np.arange(100*100)).reshape(100,100)
+    
 
 def main():
     logger.info("### starting ###")
@@ -1152,11 +1154,13 @@ def main():
     # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
     kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
-    # kics = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
+    kics = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
 
     for kic in kics:
         np.set_printoptions(linewidth=1000, precision=1)
         target = print_better_aperture(kic)
+
+    testing("8462852")
     logger.info("### everything done ###")
     return 0
 
