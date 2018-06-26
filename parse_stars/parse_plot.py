@@ -18,7 +18,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import lightkurve as lk
 
 ## Setup
-f3_location = "/home/user/Desktop/astrolab/solar_data/parse_stars/f3"
+f3_location = "./f3"
 results_folder = "./results/"
 output_folder = "./tests/"
 ffidata_folder = "./ffidata/"
@@ -470,11 +470,10 @@ def is_large_ap(target):
     logger.info("is_large_ap False")
     return False
 
-# helper function for has_(close)_peaks: is peak if greater than all neighbours
+# helper function for has_close_peaks: is peak if greater than all neighbours
 #   and is brighter than center peak by factor, assumes center peak = target
-def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
-    center = img[len(img[0])//2][len(img)//2]
-    min_bright = factor * center
+def is_peak(max_of, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
+    min_bright = factor * max_of
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [not (xi0j0 == 0 and all(x == 0 for x in others))
                 , all(x < xi0j0 for x in others)
@@ -484,10 +483,11 @@ def is_peak(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
 
 # boolean function: determines if there's a peak within a given distance
 #   around center point (target star)
-def has_close_peaks(target, diff=7, min_factor=1):
+def has_close_peaks(target, diff=7, min_factor=1, avoid_pixels=0):
+    peaks = []
     img = target.img
-    len_x = len(img[0])
-    len_y = len(img)
+    len_x = img.shape[1]
+    len_y = img.shape[0]
     c_i = len_y//2
     c_j = len_x//2
     if c_i <= diff or diff <= 0:
@@ -502,24 +502,23 @@ def has_close_peaks(target, diff=7, min_factor=1):
     else:
         min_j = c_j - diff
         max_j = c_j + diff
-    avoids_i = [] #range(c_i-1, c_i+2)
-    avoids_j = [] #range(c_j-1, c_j+2)
+    avoids_i = range(c_i-avoid_pixels, c_i+1+avoid_pixels)
+    avoids_j = range(c_j-avoid_pixels, c_j+1+avoid_pixels)
     for i in range(min_i, max_i):
         for j in range(min_j, max_j):
             if i in avoids_i and j in avoids_j:
                 continue
-            if is_peak(img, img[i, j], img[i, j-1], img[i, j+1], \
+            if is_peak(img[c_i, c_j], img[i, j], img[i, j-1], img[i, j+1], \
                        img[i-1, j], img[i+1, j], min_factor):
+                peaks.append((i, j))
                 logger.info("has_close_peaks True")
-                return True
-    logger.info("has_close_peaks False")
-    return False
+    if len(peaks) == 0:
+        logger.info("has_close_peaks False")
+    return any(peaks)
 
 def is_faint_rough(target, limit=5500000):
-    c_i = len(target.img[0])//2
-    c_j = len(target.img)//2
-    c_i = 15
-    c_j = 15
+    c_i = (img.shape[0])//2
+    c_j = (img.shape[1])//2
     is_faint = True
     for i in range(c_i - 1, c_i + 2):
         for j in range(c_i - 1, c_i + 2):
@@ -691,6 +690,37 @@ def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     logger.info("plot_targets done")
     return parsed_targets
 
+def is_n_bools(arr, n, bool_func):
+    n_bools = False
+    for i in arr:
+        if bool_func(i):
+            n -= 1
+        if n == 0:
+            n_bools = True
+            break
+    return n_bools
+
+def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
+    min_bright = factor * (np.max(img) - np.min(img))
+    others = [xi0j1, xi0j2, xi1j0, xi2j0]
+    booleans = [any(others)
+                , is_n_bools(others, 2, lambda x: x == 0)
+                , xi0j0 >= min_bright
+                ]
+    return all(booleans)
+
+def remove_second_star(img, min_factor):
+    removes = []
+    for i in range(1, img.shape[0]-1):
+        for j in range(1, img.shape[1]-1):
+            if is_second_star(img, img[i, j], img[i, j-1], img[i, j+1], \
+                              img[i-1, j], img[i+1, j], min_factor):
+                removes.append((i, j))
+    for coord in removes:
+        i, j = coord
+        img[i, j] = 0
+    return img
+
 def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
     new_arr = arr if is_decreasing else np.flip(arr, 0)
     diffs = np.diff(new_arr)
@@ -707,8 +737,8 @@ def img_to_new_aperture(target, img, image_region=15):
     target.img = img
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
-    len_x = img.shape[1]
     len_y = img.shape[0]
+    len_x = img.shape[1]
 
     for i in range(len_y):
         big_i = i+ii-image_region
@@ -778,12 +808,14 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
     while run_cycle:
         img_cycle = np.empty_like(img_save)
         img_cycle[:] = img_save
-        if has_close_peaks(target, 100, 1.5):
+        if has_close_peaks(target, 100, 1.2):
             img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, 1)
         else:
             img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, relax_pixels)
         run_cycle = np.any(np.subtract(img_save, img_cycle))
         img_save = img_cycle
+
+    remove_second_star(img_save, 0.5)
 
     img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
@@ -1118,13 +1150,13 @@ def main():
     ## TESTS
 
     # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
-    # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
+    kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
-    kics = ["8462852", "2574945", "3124279", "8381999"]
+    # kics = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
 
     for kic in kics:
-        np.set_printoptions(linewidth=1000)
-        print_better_aperture(kic)
+        np.set_printoptions(linewidth=1000, precision=1)
+        target = print_better_aperture(kic)
     logger.info("### everything done ###")
     return 0
 
