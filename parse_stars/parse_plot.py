@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
 import lightkurve as lk
+from astropy.modeling import models, fitting
 
 ## Setup
 f3_location = "./f3"
@@ -76,10 +77,10 @@ def get_existing_kics(arr1, arr2):
 
 # checks if given kics is in file and that data exists for given columns
 # WARNING: no way to separate split string by spaces and detect no data
-def get_good_existing_kics(filename, list_kids, param_arr):
+def get_good_existing_kics(fin, list_kids, param_arr):
     list_params_kics = []
     exists_good_params = True
-    with open(filename) as f:
+    with open(fin) as f:
         for line in f:
             curr_params = list(filter(None, line.strip().split(' ')))
             curr_params_kic = curr_params[0]
@@ -95,7 +96,7 @@ def get_good_existing_kics(filename, list_kids, param_arr):
     return list_good_kics
 
 # checks if given kics is in file and data exists for all columns
-def get_good_kics(filename, list_kics):
+def get_good_kics(fin, list_kics):
     pass
 
 # get all kids from several files
@@ -114,9 +115,9 @@ def get_kics_files(list_files, sep=',', skip_rows=1):
     return all_kics
 
 # get list of kics from a file where kic is first of a column
-def get_kics(filename, sep=',', skip_rows=0):
+def get_kics(fin, sep=',', skip_rows=0):
     all_kics = []
-    with open(filename) as f:
+    with open(fin) as f:
         for _ in range(skip_rows):
             next(f)
         reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
@@ -147,9 +148,9 @@ def get_nth_kics(fin, n, m, sep=',', skip_rows=0):
     return kics
 
 # prompts warning if file exists
-def does_path_exists(filename):
-    if os.path.exists(filename):
-        ans = raw_input("File " + filename + " already exists, proceed for all? (y/n) ")
+def does_path_exists(fin):
+    if os.path.exists(fin):
+        ans = raw_input("File " + fin + " already exists, proceed for all? (y/n) ")
         ans = ans.strip().lower()
         print(ans)
         if (ans != "y"):
@@ -159,19 +160,19 @@ def does_path_exists(filename):
 
 # prints array to column in file, splits up files by kids_per_file
 # returns length of array
-def array_to_file(arr, filename, kids_per_file=9999, bypass_prompt=True):
+def array_to_file(arr, fout, kids_per_file=9999, bypass_prompt=True):
     arr_i = 0
     total_kids = len(arr)
     output_files_i = 0
     no_of_files = total_kids//kids_per_file + 1
     remainder_of_files = total_kids%kids_per_file
-    good_kids_filename = filename + "_" + str(output_files_i) + ".txt"
+    good_kids_filename = fin + "_" + str(output_files_i) + ".txt"
 
-    if not bypass_prompt and does_path_exists(filename):
+    if not bypass_prompt and does_path_exists(fout):
         return 1
 
     for output_files_i in range(number_of_files):
-        good_kids_filename = file_name + "_" + str(output_files_i) + ".txt"
+        good_kids_filename = fout + "_" + str(output_files_i) + ".txt"
         if (output_files_i == number_of_files - 1):
             number_kids_per_file = remainder_of_files
         with open(good_kids_filename, 'w') as write_f:
@@ -183,12 +184,28 @@ def array_to_file(arr, filename, kids_per_file=9999, bypass_prompt=True):
     logger.info("array_to_file done")
     return total_kids
 
-# prints array to each row in filename (good for kics)
-def simple_array_to_file(filename, arr):
-    with open(filename, 'w') as f:
-        writer = csv.writer(f, delimiter=',', lineterminator='\n')
-        for i in range(len(arr)):
-            writer.writerow([arr[i]])
+def get_dim(arr):
+    if not type(arr[0]) == list:
+        return 1
+    return 1 + get_dim(arr[0])
+
+# prints array to each row in filename, works for both 1d and 2d arrays
+def simple_array_to_file(fout, arr):
+    if type(arr) == np.ndarray:
+        np.savetxt(fout, arr, delimiter=',', newline='\n')
+    else:
+        with open(fout, 'w') as f:
+            writer = csv.writer(f, delimiter=',', lineterminator='\n')
+            dim = get_dim(arr)
+            if dim == 1:
+                for row in arr:
+                    writer.writerow([row])
+            elif dim == 2:
+                for row in arr:
+                    writer.writerow(row)
+            else:
+                logger.error("simple_array_to_file can't support >2 dimensions")
+    logger.info("simple_array_to_file done")
     return 0
 
 def get_dic_keys(dic):
@@ -196,12 +213,12 @@ def get_dic_keys(dic):
     return keys
 
 # prints one dict of kid, kepmag, angsep to csv file
-def dict_to_file(filename, dicts, keys=None, bypass_prompt=True):
-    if not bypass_prompt and does_path_exists(filename):
+def dict_to_file(fout, dicts, keys=None, bypass_prompt=True):
+    if not bypass_prompt and does_path_exists(fout):
         return 1
     if keys == None:
         keys = [key for key in dicts[0]][1:]
-    with open(filename, 'w') as write_f:
+    with open(fout, 'w') as write_f:
         for key_i in range(len(keys) - 1):
             write_f.write([keys[key_i]] + ",")
             write_f.write([keys[-1]] + "\n")
@@ -701,7 +718,9 @@ def is_n_bools(arr, n, bool_func):
     return n_bools
 
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
-    min_bright = factor * (np.max(img) - np.min(img))
+    min_bright = factor * (np.max(img) - np.min(img[np.nonzero(img)]))
+    # print np.min(img)
+    # print np.min(img[np.nonzero(img)])
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [any(others)
                 , is_n_bools(others, 2, lambda x: x == 0)
@@ -816,7 +835,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
         run_cycle = np.any(np.subtract(img_save, img_cycle))
         img_save = img_cycle
 
-    remove_second_star(img_save, 0.7)
+    remove_second_star(img_save, 0.5)
 
     img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
@@ -1074,9 +1093,139 @@ def get_mast_params(target, params):
     print(data)
     return
 
+def model_background(target, model_pix):
+    for i in range(target.postcard.shape[0]):
+        region = target.postcard[i]
+        z = region[target.center[0]-model_pix:target.center[0]+model_pix,\
+                   target.center[1]-model_pix:target.center[1]+model_pix]
+        y, x = np.mgrid[:(model_pix*2), :(model_pix*2)]
+        p_init = models.Polynomial2D(degree=2)
+        fit_p = fitting.LinearLSQFitter()
+        p = fit_p(p_init, x, y, z=z)
+        region[target.center[0]-model_pix:target.center[0]+model_pix, \
+               target.center[1]-model_pix:target.center[1]+model_pix] \
+               = region[target.center[0]-model_pix:target.center[0]+model_pix, \
+                        target.center[1]-model_pix:target.center[1]+model_pix] - p(x, y)
+
+    target.integrated_postcard = np.sum(target.postcard, axis=0)
+    run_partial_photometry(target)
+    return target
+
 def testing(targ):
-    img = np.array(np.arange(100*100)).reshape(100,100)
-    
+    image_region = 15
+    mask_factor = 0.001
+    fout = "./"
+    model_pix = 15
+    veep = 1000
+
+    target = photometry.star(targ, ffi_dir=ffidata_folder)
+
+    try:
+        target.make_postcard()
+    except Exception as e:
+        logger.info("run_photometry unsuccessful: %s" % target.kic)
+        logger.error(e.message)
+        return 1
+
+    old_post = np.empty_like(target.postcard)
+    old_post[:] = target.postcard
+
+    old_int = np.empty_like(target.integrated_postcard)
+    old_int[:] = target.integrated_postcard
+
+    post = target.integrated_postcard
+    maximum = np.max(post[np.nonzero(post)])
+    minimum = 0 #np.min(post[np.nonzero(post)])
+
+    wow_mask = np.where(target.integrated_postcard >= 0.1*(maximum-minimum), 1, 0)
+    plt.figure(1)
+    plt.subplot(1, 3, 2)
+    plt.imshow(target.integrated_postcard, interpolation='nearest', cmap='gray',vmin=0, vmax=veep, origin='lower')
+    plt.subplot(1, 3, 1)
+    plt.imshow(wow_mask, origin='lower', cmap='gray',)
+    # plt.show()
+    # plt.close()
+
+    run_partial_photometry(target)
+
+
+    tar = target.target
+    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
+               tar.params['Channel_2'], tar.params['Channel_3']]
+
+    kepprf = lk.KeplerPRF(channel=channel[0], shape=(image_region*2, image_region*2), \
+                          column=image_region, row=image_region)
+    prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
+                 scale_row=1, scale_col=1, rotation_angle=0)
+    mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
+
+    with PdfPages(fout + targ + "_out.pdf") as pdf:
+
+        plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close()
+
+        improve_aperture(target, mask, image_region, relax_pixels=2)
+        plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close()
+
+        for i in range(target.postcard.shape[0]):
+            region = target.postcard[i]
+            z = region[target.center[0]-model_pix:target.center[0]+model_pix,\
+                       target.center[1]-model_pix:target.center[1]+model_pix]
+
+            y, x = np.mgrid[:(model_pix*2), :(model_pix*2)]
+            p_init = models.Polynomial2D(degree=2)
+            # fit_p = fitting.LevMarLSQFitter() #
+            # p = fit_p(p_init, x, y, z=z)
+            fit_p = fitting.LinearLSQFitter()
+            p = fit_p(p_init, x, y, z=z)
+            if i == 0:
+                plt.figure(2, figsize=(8, 2.5))
+                plt.subplot(1, 3, 1)
+                plt.imshow(z,  interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+                plt.title("Data")
+                plt.subplot(1, 3, 2)
+                plt.imshow(p(x, y),  interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+                plt.title("Model")
+                plt.subplot(1, 3, 3)
+                plt.imshow(z - p(x, y), interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+                plt.title("Residual")
+
+            region[target.center[0]-model_pix:target.center[0]+model_pix, \
+                   target.center[1]-model_pix:target.center[1]+model_pix] \
+                   = region[target.center[0]-model_pix:target.center[0]+model_pix, \
+                            target.center[1]-model_pix:target.center[1]+model_pix] - p(x, y)
+
+
+        ummm = not np.any(np.where(np.subtract(old_post, target.postcard) != 0, 1, 0))
+        print "WHAT", ummm
+
+        target.integrated_postcard = np.sum(target.postcard, axis=0)
+        res = not np.any(np.where(np.subtract(old_int, target.integrated_postcard) != 0, 1, 0))
+
+        print "AHHHHHH", res
+
+        plt.figure(1)
+        plt.subplot(1, 3, 3)
+        plt.imshow(target.integrated_postcard, interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+        plt.show()
+        # plt.close()
+
+        run_partial_photometry(target)
+
+        # improve_aperture(target, mask, image_region, relax_pixels=2)
+        plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close()
+
 
 def main():
     logger.info("### starting ###")
@@ -1150,17 +1299,19 @@ def main():
                  ]
 
     ## TESTS
+    np.set_printoptions(linewidth=1000, precision=1)
 
     # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
-    kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
+    # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
-    kics = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
+    # kics = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
 
-    for kic in kics:
-        np.set_printoptions(linewidth=1000, precision=1)
-        target = print_better_aperture(kic)
+    # for kic in kics:
+    #     target = print_better_aperture(kic)
 
-    testing("8462852")
+    testing("11913365")
+    testing("11913377")
+
     logger.info("### everything done ###")
     return 0
 
