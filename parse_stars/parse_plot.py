@@ -5,7 +5,6 @@ import logging
 import itertools
 import numpy as np
 from math import sqrt
-from collections import Counter
 from datetime import datetime
 
 import matplotlib
@@ -436,13 +435,13 @@ def is_more_or_less_all(target, quarters):
     return is_strange
 
 # helper function for is_more_or_less
-# returns are all but one element is nonzero in an array
+# returns if all but one element is nonzero in an array
 def most_are_same(arr):
-    counts = Counter(arr)
-    for no, count in counts.items():
-        if (count >= (len(arr) - 1)) and (no != 0):
-            return True, no
-    return False
+    nos, counts = np.unique(arr, return_counts=True)
+    for i, count in enumerate(counts):
+        if count >= len(arr) - 1 and nos[i] != 0:
+            return True, nos[i]
+    return False, 0
 
 # helper function that determines 3-point pattern
 # all but one pattern from same channel must be the same
@@ -507,13 +506,13 @@ def has_close_peaks(target, diff=7, min_factor=1, avoid_pixels=0):
     len_y = img.shape[0]
     c_i = len_y//2
     c_j = len_x//2
-    if c_i <= diff or diff <= 0:
+    if diff is None or c_i <= diff or diff <= 0:
         min_i = 1
         max_i = len_y - 1
     else:
         min_i = c_i - diff
         max_i = c_i + diff
-    if c_j <= diff or diff <= 0:
+    if diff is None or c_j <= diff or diff <= 0:
         min_j = 1
         max_j = len_x - 1
     else:
@@ -571,7 +570,7 @@ def plot_data(target, count=0):
     fig.tight_layout()
 
     logger.info("plot_data done")
-    return target
+    return fig
 
 def pad_img(img, desired_shape, positions, pad_val=0):
     if len(desired_shape) != len(positions):
@@ -633,9 +632,8 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
 def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
                    extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
 
-    target = photometry.star(targ, ffi_dir=ffidata_folder)
-
     try:
+        target = photometry.star(targ, ffi_dir=ffidata_folder)
         target.make_postcard()
     except Exception as e:
         logger.info("run_photometry unsuccessful: %s" % target.kic)
@@ -658,8 +656,9 @@ def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
             return 1
         elif boolean(target):
             return 1
+    plot_data(target, count)
     logger.info("tests_booleans done")
-    return plot_data(target, count)
+    return target
 
 # outputs dict of functions that finds faulty stars
 #   and kics that fall in those functions
@@ -718,7 +717,7 @@ def is_n_bools(arr, n, bool_func):
     return n_bools
 
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
-    min_bright = factor * (np.max(img) - np.min(img[np.nonzero(img)]))
+    min_bright = factor * (np.max(img)) #- np.min(img[np.nonzero(img)]))
     # print np.min(img)
     # print np.min(img[np.nonzero(img)])
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
@@ -753,6 +752,20 @@ def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
             return diff[0] if is_decreasing else len(arr)-(diff[-1]+1)
     return -1 if is_decreasing else 0
 
+def clip_array(coords, max_coords, is_max_bounds):
+    length = len(coords)
+    if length != len(max_coords):
+        logger.error("clip_array dimensions must be same")
+        return
+    results = ()
+    for i, coord in enumerate(coords):
+        if is_max_bounds[i] == True:
+            add = (coord,) if coord < max_coords[i] else (max_coords[i],)
+        else:
+            add = (coord,) if coord > max_coords[i] else (max_coords[i],)
+        results += add
+    return results
+
 def img_to_new_aperture(target, img, image_region=15):
     target.img = img
     ii, jj = target.center
@@ -761,14 +774,11 @@ def img_to_new_aperture(target, img, image_region=15):
     len_x = img.shape[1]
 
     for i in range(len_y):
-        big_i = i+ii-image_region
-        if big_i >= target.targets.shape[0]:
-            big_i = target.targets.shape[0] - 1
         for j in range(len_x):
             if img[i, j] == 0:
-                big_j = j+jj-image_region
-                if big_j >= target.targets.shape[1]:
-                    big_j = target.targets.shape[1] - 1
+                big_i, big_j = clip_array([i+ii-image_region, j+jj-image_region], \
+                                          [target.targets.shape[0]-1, target.targets.shape[1]-1], \
+                                          [True, True])
                 target.targets[big_i, big_j] = 0
     return img
 
@@ -828,14 +838,14 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
     while run_cycle:
         img_cycle = np.empty_like(img_save)
         img_cycle[:] = img_save
-        if has_close_peaks(target, 100, 1.2):
+        if has_close_peaks(target, None, 1.2):
             img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, 1)
         else:
             img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, relax_pixels)
         run_cycle = np.any(np.subtract(img_save, img_cycle))
         img_save = img_cycle
 
-    remove_second_star(img_save, 0.5)
+    remove_second_star(img_save, 0.7)
 
     img_to_new_aperture(target, img_save, image_region)
     recalculate_aperture(target)
@@ -901,16 +911,12 @@ def print_lc_improved_aperture(kics, fout, image_region=15):
     logger.info("print_lc_improved_aperture done")
     return 0
 
-def nanmean(data, **args):
-    masked = np.ma.masked_array(data, np.isnan(data)).mean(**args)
-    return numpy.ma.filled(masked, fill_value=np.nan)
-
 def is_std_better_biggest(old_stds, stds):
     max_i = np.argmax(stds)
     return stds[max_i] <= old_stds[max_i]
 
 def is_std_better_avg(old_stds, stds):
-    return nanmean(stds) <= nanmean(old_stds)
+    return np.nanmean(stds) <= np.nanmean(old_stds)
 
 # TODO: test x number of parameters
 # runs through lists of different parameters, print flux plots and apertures,
@@ -1096,16 +1102,19 @@ def get_mast_params(target, params):
 def model_background(target, model_pix):
     for i in range(target.postcard.shape[0]):
         region = target.postcard[i]
-        z = region[target.center[0]-model_pix:target.center[0]+model_pix,\
-                   target.center[1]-model_pix:target.center[1]+model_pix]
+        coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                             target.center[1]-model_pix, target.center[1]+model_pix], \
+                            [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                            [False, True, False, True])
+        min_i, max_i, min_j, max_j = coords
+        z = region[min_i:max_i, min_j:max_j]
         y, x = np.mgrid[:(model_pix*2), :(model_pix*2)]
         p_init = models.Polynomial2D(degree=2)
         fit_p = fitting.LinearLSQFitter()
         p = fit_p(p_init, x, y, z=z)
-        region[target.center[0]-model_pix:target.center[0]+model_pix, \
-               target.center[1]-model_pix:target.center[1]+model_pix] \
-               = region[target.center[0]-model_pix:target.center[0]+model_pix, \
-                        target.center[1]-model_pix:target.center[1]+model_pix] - p(x, y)
+        model = p(x, y)
+        region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
+
 
     target.integrated_postcard = np.sum(target.postcard, axis=0)
     run_partial_photometry(target)
@@ -1116,7 +1125,10 @@ def testing(targ):
     mask_factor = 0.001
     fout = "./"
     model_pix = 15
+    veen = -1000
     veep = 1000
+    dab = 0.001
+    wanna_save = True
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
@@ -1135,19 +1147,31 @@ def testing(targ):
 
     post = target.integrated_postcard
     maximum = np.max(post[np.nonzero(post)])
-    minimum = 0 #np.min(post[np.nonzero(post)])
+    minimum = 0
 
-    wow_mask = np.where(target.integrated_postcard >= 0.1*(maximum-minimum), 1, 0)
-    plt.figure(1)
-    plt.subplot(1, 3, 2)
-    plt.imshow(target.integrated_postcard, interpolation='nearest', cmap='gray',vmin=0, vmax=veep, origin='lower')
-    plt.subplot(1, 3, 1)
-    plt.imshow(wow_mask, origin='lower', cmap='gray',)
-    # plt.show()
-    # plt.close()
+    ai, bi, aj, bj = target.center[0]-model_pix, target.center[0]+model_pix, \
+                     target.center[1]-model_pix, target.center[1]+model_pix
+
+    coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                         target.center[1]-model_pix, target.center[1]+model_pix], \
+                        [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                        [False, True, False, True])
+    min_i, max_i, min_j, max_j = coords
+
+    old_int[min_i,min_j:max_j] = maximum
+    old_int[max_i,min_j:max_j] = maximum
+    old_int[min_i:max_i,min_j] = maximum
+    old_int[min_i:max_i,max_j] = maximum
+
+    wow_mask = np.where(target.integrated_postcard >= dab*(maximum-minimum), 1, 0)
+    fig1 = plt.figure(1, figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.imshow(old_int, interpolation='nearest', cmap='gray', vmin=veen, vmax=veep, origin='lower')
 
     run_partial_photometry(target)
 
+    hey_mask = np.where(target.targets != 0, 1, 0)
+    hey_mask = hey_mask 
 
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
@@ -1161,66 +1185,102 @@ def testing(targ):
 
     with PdfPages(fout + targ + "_out.pdf") as pdf:
 
-        plot_data(target)
+        fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        plt.close()
+        if not wanna_save:
+            plt.close()
 
         improve_aperture(target, mask, image_region, relax_pixels=2)
-        plot_data(target)
+        fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        plt.close()
+        if not wanna_save:
+            plt.close()
 
         for i in range(target.postcard.shape[0]):
             region = target.postcard[i]
-            z = region[target.center[0]-model_pix:target.center[0]+model_pix,\
-                       target.center[1]-model_pix:target.center[1]+model_pix]
 
-            y, x = np.mgrid[:(model_pix*2), :(model_pix*2)]
+            coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                                 target.center[1]-model_pix, target.center[1]+model_pix], \
+                                [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                                [False, True, False, True])
+            min_i, max_i, min_j, max_j = coords
+            zold = region[min_i:max_i, min_j:max_j]
+
+
+            if not np.any(zold):
+                break
+
+            maxz = np.max(zold[np.nonzero(zold)])
+            minz = 0#np.min(post[np.nonzero(post)])
+            # wow_mask = np.where(z >= dab*(maxz-minz), 1, 0)
+
+            new_mask = np.where(zold >= (maxz-minz)*0.01, 1, 0)
+
+            wow_mask = hey_mask[min_i:max_i, min_j:max_j]
+
+            wow_mask = wow_mask + new_mask
+
+            z = np.ma.masked_array(zold, mask=wow_mask)
+
+            ycoord = min(model_pix*2, zold.shape[0])
+            xcoord = min(model_pix*2, zold.shape[1])
+            y, x = np.mgrid[:ycoord, :xcoord]
             p_init = models.Polynomial2D(degree=2)
-            # fit_p = fitting.LevMarLSQFitter() #
-            # p = fit_p(p_init, x, y, z=z)
             fit_p = fitting.LinearLSQFitter()
             p = fit_p(p_init, x, y, z=z)
+
+            model = p(x, y) #/target.postcard.shape[0]
+            model = np.clip(model, np.min(z), np.max(z))
+
             if i == 0:
-                plt.figure(2, figsize=(8, 2.5))
-                plt.subplot(1, 3, 1)
-                plt.imshow(z,  interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+                fig2 = plt.figure(2, figsize=(8, 2.5))
+                plt.subplot(1, 4, 1)
+                plt.imshow(wow_mask, cmap='gray', vmin=0, vmax=1, origin='lower')
+                plt.title("Mask")
+
+                plt.subplot(1, 4, 2)
+                plt.imshow(z,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Data")
-                plt.subplot(1, 3, 2)
-                plt.imshow(p(x, y),  interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+                plt.subplot(1, 4, 3)
+                plt.imshow(model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Model")
-                plt.subplot(1, 3, 3)
-                plt.imshow(z - p(x, y), interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
+                plt.subplot(1, 4, 4)
+                plt.imshow(z - model, interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Residual")
+                plt.colorbar()
+                if wanna_save:
+                    pdf.savefig()
 
-            region[target.center[0]-model_pix:target.center[0]+model_pix, \
-                   target.center[1]-model_pix:target.center[1]+model_pix] \
-                   = region[target.center[0]-model_pix:target.center[0]+model_pix, \
-                            target.center[1]-model_pix:target.center[1]+model_pix] - p(x, y)
-
+            region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
         ummm = not np.any(np.where(np.subtract(old_post, target.postcard) != 0, 1, 0))
-        print "WHAT", ummm
-
         target.integrated_postcard = np.sum(target.postcard, axis=0)
         res = not np.any(np.where(np.subtract(old_int, target.integrated_postcard) != 0, 1, 0))
 
-        print "AHHHHHH", res
+        fako = np.zeros_like(target.integrated_postcard)
+        fako[:] = target.integrated_postcard
+        fako[min_i,min_j:max_j] = maximum
+        fako[max_i,min_j:max_j] = maximum
+        fako[min_i:max_i,min_j] = maximum
+        fako[min_i:max_i,max_j] = maximum
 
-        plt.figure(1)
-        plt.subplot(1, 3, 3)
-        plt.imshow(target.integrated_postcard, interpolation='nearest', cmap='gray', vmin=0, vmax=veep, origin='lower')
-        plt.show()
-        # plt.close()
+        fig1 = plt.figure(1)
+        plt.subplot(1, 2, 2)
+        plt.imshow(fako, interpolation='nearest', cmap='gray', vmin=veen, vmax=veep, origin='lower')
+        plt.colorbar()
+        if wanna_save:
+            pdf.savefig()
+        else:
+            plt.show()
+        plt.close()
 
         run_partial_photometry(target)
 
-        # improve_aperture(target, mask, image_region, relax_pixels=2)
-        plot_data(target)
+        fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
@@ -1301,22 +1361,20 @@ def main():
     ## TESTS
     np.set_printoptions(linewidth=1000, precision=1)
 
-    # kics = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
+    kics1 = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
-    # kics = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
+    kics2 = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
+    kics = ["11913365", "11913377"] + ben_kics
 
-    # for kic in kics:
-    #     target = print_better_aperture(kic)
-
-    testing("11913365")
-    testing("11913377")
+    for kic in kics:
+        # target = print_better_aperture(kic)
+        testing(kic)
 
     logger.info("### everything done ###")
     return 0
 
-if __name__ == "__main__" and __package__ is None:
-    from os import sys, path
-    sys.path.append(f3_location)
+if __name__ == "__main__": # and __package__ is None:
+    os.sys.path.append(f3_location)
     from f3 import photometry
     main()
