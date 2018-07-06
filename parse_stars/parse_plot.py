@@ -1222,7 +1222,7 @@ def testing(targ):
 
             wow_mask = hey_mask[min_i:max_i, min_j:max_j]
 
-            wow_mask = wow_mask + new_mask
+            wow_mask = np.where((wow_mask + new_mask) != 0, 1, 0)
 
             z = np.ma.masked_array(zold, mask=wow_mask)
 
@@ -1254,6 +1254,7 @@ def testing(targ):
                 plt.colorbar()
                 if wanna_save:
                     pdf.savefig()
+                    plt.close()
 
             region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
@@ -1365,7 +1366,7 @@ def main():
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
     kics2 = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
-    kics = ["11913365", "11913377"] + ben_kics
+    kics = ["11913365", "11913377"] #+ ben_kics
 
     for kic in kics:
         # target = print_better_aperture(kic)
