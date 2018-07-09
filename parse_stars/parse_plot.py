@@ -1,19 +1,18 @@
-import csv
-import sys
 import os
+import sys
 import logging
+import csv
 import itertools
 import numpy as np
-from math import sqrt
-from datetime import datetime
 
 import matplotlib
 if os.environ.get('DISPLAY','') == "":
     print("Using non-interactive Agg backend")
     matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gs
+from matplotlib import pyplot as plt
+from matplotlib import gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
+
 import lightkurve as lk
 from astropy.modeling import models, fitting
 
@@ -604,7 +603,7 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
                               remove_excess, plot_flag, plot_window)
     except Exception as e:
         logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
-        logger.error(e)
+        logger.error(e, exc_info=True)
         return 1
 
     target.data_for_target(do_roll=True, ignore_bright=0)
@@ -718,11 +717,9 @@ def is_n_bools(arr, n, bool_func):
 
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
     min_bright = factor * (np.max(img)) #- np.min(img[np.nonzero(img)]))
-    # print np.min(img)
-    # print np.min(img[np.nonzero(img)])
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [any(others)
-                , is_n_bools(others, 2, lambda x: x == 0)
+                , is_n_bools(others, 1, lambda x: x == 0)
                 , all(x < xi0j0 for x in others)
                 , xi0j0 >= min_bright
                 ]
@@ -782,15 +779,6 @@ def img_to_new_aperture(target, img, image_region=15):
                 target.targets[big_i, big_j] = 0
     return img
 
-def recalculate_aperture(target):
-    target.roll_best = np.zeros((4,2))
-    for i in range(4):
-        g = np.where(target.qs == i)[0]
-        wh = np.where(target.times[g] > 54947)
-        target.roll_best[i] = target.do_rolltest(g, wh)
-    target.do_photometry()
-    return 0
-
 def isolate_star_cycle(img, ii, jj, image_region=15, relax_pixels=2):
     len_x = img.shape[1]
     len_y = img.shape[0]
@@ -848,7 +836,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
     remove_second_star(img_save, 0.7)
 
     img_to_new_aperture(target, img_save, image_region)
-    recalculate_aperture(target)
+    target.data_for_target(do_roll=True, ignore_bright=0)
 
     logger.info("improve_aperture done")
     return target.img
@@ -1099,6 +1087,19 @@ def get_mast_params(target, params):
     print(data)
     return
 
+def make_model_background(img, model_pix=15):
+    ycoord = min(model_pix*2, img.shape[0])
+    xcoord = min(model_pix*2, img.shape[1])
+    y, x = np.mgrid[:ycoord, :xcoord]
+    p_init = models.Polynomial2D(degree=2)
+    fit_p = fitting.LinearLSQFitter()
+    p = fit_p(p_init, x, y, z=img)
+
+    model = p(x, y)
+    # model = np.clip(model, np.min(z), np.max(z))
+
+    return model
+
 def model_background(target, model_pix):
     for i in range(target.postcard.shape[0]):
         region = target.postcard[i]
@@ -1107,18 +1108,73 @@ def model_background(target, model_pix):
                             [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
                             [False, True, False, True])
         min_i, max_i, min_j, max_j = coords
-        z = region[min_i:max_i, min_j:max_j]
-        y, x = np.mgrid[:(model_pix*2), :(model_pix*2)]
-        p_init = models.Polynomial2D(degree=2)
-        fit_p = fitting.LinearLSQFitter()
-        p = fit_p(p_init, x, y, z=z)
-        model = p(x, y)
+        img = region[min_i:max_i, min_j:max_j]
+        model = make_model_background(img)
         region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
-
 
     target.integrated_postcard = np.sum(target.postcard, axis=0)
     run_partial_photometry(target)
     return target
+
+def get_median_region(arr):
+    minimum = np.median(arr)
+    return np.where(arr > minimum, 1, 0)
+
+def logical_and_all_args(*args):
+    result = []
+    for arg in args:
+        result =+ arg
+    return np.where(result != 0, 1, 0)
+
+def make_background_mask_max(target, img, model_pix=15, max_factor=0.1):
+    if not np.any(img):
+        return -1
+
+    coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                         target.center[1]-model_pix, target.center[1]+model_pix], \
+                        [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                        [False, True, False, True])
+    min_i, max_i, min_j, max_j = coords
+
+    maximum = np.max(img[np.nonzero(img)])
+    minimum = np.min(img[np.nonzero(img)])
+
+    max_mask = np.where(img >= (maximum-minimum)*max_factor, 1, 0)
+    # max_mask = get_median_region(img)
+    targets_mask = np.where(target.targets != 0, 1, 0)[min_i:max_i, min_j:max_j]
+    mask = logical_and_all_args(max_mask, targets_mask)
+
+    return mask
+
+def build_mask_layer(img, coord, pix):
+    i, j = coord
+    region = img[i-pix:i+pix, j-pix:j+pix]
+    mask_region = get_median_region(region)
+    new = np.zeros_like(img)
+    new[i-pix:i+pix, j-pix:j+pix] = mask_region
+    return new
+
+def make_background_mask_filter(target, img, mask_pixels=2):
+    data = img
+
+    # from scipy import ndimage as ndi
+    from skimage.feature import peak_local_max
+    from skimage import img_as_float
+
+    im = img_as_float(data)
+    # image_max = ndi.maximum_filter(im, size=5, mode='constant')
+    coordinates = peak_local_max(im, min_distance=2)
+    mask_peaks = np.zeros_like(im)
+
+    for coord in coordinates:
+        coord_tuple = tuple(coord)
+        mask_peaks += build_mask_layer(im, coord_tuple, mask_pixels)
+
+    mask_peaks = np.where(mask_peaks > 0, 1, 0)
+    mask = mask_peaks
+    # mask = np.where(image_max >= 0.1*np.average(image_max), 1, 0)
+
+    return mask
 
 def testing(targ):
     image_region = 15
@@ -1127,8 +1183,7 @@ def testing(targ):
     model_pix = 15
     veen = -1000
     veep = 1000
-    dab = 0.001
-    wanna_save = True
+    wanna_save = False
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
@@ -1163,7 +1218,6 @@ def testing(targ):
     old_int[min_i:max_i,min_j] = maximum
     old_int[min_i:max_i,max_j] = maximum
 
-    wow_mask = np.where(target.integrated_postcard >= dab*(maximum-minimum), 1, 0)
     fig1 = plt.figure(1, figsize=(12, 6))
     plt.subplot(1, 2, 1)
     plt.imshow(old_int, interpolation='nearest', cmap='gray', vmin=veen, vmax=veep, origin='lower')
@@ -1171,7 +1225,6 @@ def testing(targ):
     run_partial_photometry(target)
 
     hey_mask = np.where(target.targets != 0, 1, 0)
-    hey_mask = hey_mask 
 
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
@@ -1189,16 +1242,18 @@ def testing(targ):
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        if not wanna_save:
-            plt.close()
+        plt.close(fig0)
 
         improve_aperture(target, mask, image_region, relax_pixels=2)
         fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        if not wanna_save:
-            plt.close()
+        plt.close(fig0)
+
+        ranges = []
+        mins = []
+        maxs = []
 
         for i in range(target.postcard.shape[0]):
             region = target.postcard[i]
@@ -1210,31 +1265,16 @@ def testing(targ):
             min_i, max_i, min_j, max_j = coords
             zold = region[min_i:max_i, min_j:max_j]
 
-
-            if not np.any(zold):
-                break
-
-            maxz = np.max(zold[np.nonzero(zold)])
-            minz = 0#np.min(post[np.nonzero(post)])
-            # wow_mask = np.where(z >= dab*(maxz-minz), 1, 0)
-
-            new_mask = np.where(zold >= (maxz-minz)*0.01, 1, 0)
-
-            wow_mask = hey_mask[min_i:max_i, min_j:max_j]
-
-            wow_mask = np.where((wow_mask + new_mask) != 0, 1, 0)
+            wow_mask = make_background_mask_filter(target, zold)
 
             z = np.ma.masked_array(zold, mask=wow_mask)
 
-            ycoord = min(model_pix*2, zold.shape[0])
-            xcoord = min(model_pix*2, zold.shape[1])
-            y, x = np.mgrid[:ycoord, :xcoord]
-            p_init = models.Polynomial2D(degree=2)
-            fit_p = fitting.LinearLSQFitter()
-            p = fit_p(p_init, x, y, z=z)
-
-            model = p(x, y) #/target.postcard.shape[0]
-            model = np.clip(model, np.min(z), np.max(z))
+            model = make_model_background(z)
+            print i, np.ptp(z), np.min(z), np.max(z)
+            print i, np.ptp(model), np.min(model), np.max(model)
+            ranges.append(np.ptp(model))
+            mins.append(np.min(model))
+            maxs.append(np.max(model))
 
             if i == 0:
                 fig2 = plt.figure(2, figsize=(8, 2.5))
@@ -1254,13 +1294,14 @@ def testing(targ):
                 plt.colorbar()
                 if wanna_save:
                     pdf.savefig()
-                    plt.close()
+                    plt.close(fig2)
 
             region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
-        ummm = not np.any(np.where(np.subtract(old_post, target.postcard) != 0, 1, 0))
+        print "HEY", targ, np.ptp(ranges), np.ptp(mins), np.ptp(maxs)
+
         target.integrated_postcard = np.sum(target.postcard, axis=0)
-        res = not np.any(np.where(np.subtract(old_int, target.integrated_postcard) != 0, 1, 0))
+        target.data_for_target(do_roll=True, ignore_bright=0)
 
         fako = np.zeros_like(target.integrated_postcard)
         fako[:] = target.integrated_postcard
@@ -1269,24 +1310,26 @@ def testing(targ):
         fako[min_i:max_i,min_j] = maximum
         fako[min_i:max_i,max_j] = maximum
 
-        fig1 = plt.figure(1)
+        plt.figure(1)
         plt.subplot(1, 2, 2)
         plt.imshow(fako, interpolation='nearest', cmap='gray', vmin=veen, vmax=veep, origin='lower')
         plt.colorbar()
         if wanna_save:
             pdf.savefig()
+            plt.close(fig1)
         else:
             plt.show()
-        plt.close()
-
-        run_partial_photometry(target)
+        plt.close("all")
 
         fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        plt.close()
+        plt.close("all")
 
+def make_sound(duration=0.3, freq=440):
+    os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
+    return 0
 
 def main():
     logger.info("### starting ###")
@@ -1366,12 +1409,13 @@ def main():
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     # print_lc_improved_aperture(kics, "out.csv")
     kics2 = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
-    kics = ["11913365", "11913377"] #+ ben_kics
+    kics = ["11913365", "11913377"] + ben_kics
 
     for kic in kics:
         # target = print_better_aperture(kic)
         testing(kic)
 
+    make_sound(0.3, 440)
     logger.info("### everything done ###")
     return 0
 
