@@ -45,7 +45,7 @@ def make_model_background(img, model_pix=15):
     p = fit_p(p_init, x, y, z=img)
 
     model = p(x, y)
-    # model = np.clip(model, np.min(z), np.max(z))
+    model = np.clip(model, np.min(img), np.max(img))
 
     return model
 
@@ -231,6 +231,8 @@ def testing(targ):
         pdf.savefig()
         plt.close(fig0)
 
+        data_ranges = []
+
         for i in range(target.postcard.shape[0]):
             region = target.postcard[i]
 
@@ -245,6 +247,8 @@ def testing(targ):
             z = np.ma.masked_array(zold, mask=wow_mask)
             model = make_model_background(z)
             models[i] = model
+
+            data_ranges.append(np.ptp(z))
 
             if i == 0:
                 fig2 = plt.figure(2, figsize=(8, 2.5))
@@ -270,13 +274,31 @@ def testing(targ):
 
         integrated_post = np.zeros_like(target.integrated_postcard)
 
-        if check_postcard_ranges(models):
-            print targ, "TRUE BOII"
-            integrated_post = np.sum(new_post, axis=0)
-            target.data_for_target(do_roll=True, ignore_bright=0)
-        else:
-            print targ, "FASLSESES"
-            integrated_post = target.integrated_postcard
+        ranges = []
+        mins = []
+        maxs = []
+        for i in range(models.shape[0]):
+            curr_card = models[i]
+            ranges.append(np.ptp(curr_card))
+            mins.append(np.min(curr_card))
+            maxs.append(np.max(curr_card))
+        # print ranges
+        # print data_ranges
+        print np.ptp(ranges)
+        print np.ptp(data_ranges)
+        print np.ptp(mins)
+        print np.ptp(maxs)
+
+        integrated_post = np.sum(new_post, axis=0)
+        target.data_for_target(do_roll=True, ignore_bright=0)
+
+        # if check_postcard_ranges(models):
+        #     print targ, "TRUE BOII"
+        #     integrated_post = np.sum(new_post, axis=0)
+        #     target.data_for_target(do_roll=True, ignore_bright=0)
+        # else:
+        #     print targ, "FASLSESES"
+        #     integrated_post = target.integrated_postcard
 
         # also save integrated_post (new) + new_post as part of target attrs
 
