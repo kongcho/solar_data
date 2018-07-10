@@ -6,3 +6,9 @@ parse_stars/f3
 parse_stars/tests
 parse_stars/ffidata
 parse_stars/venv
+
+*\.tar\.gz
+*\.zip
+*\.rar
+
+parse_stars/demo.ipynb

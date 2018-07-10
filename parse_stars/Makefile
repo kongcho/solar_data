@@ -3,7 +3,7 @@ setup:
 	venv/bin/pip install -r ./requirements.txt
 
 run:
-	venv/bin/python ./parse_plot.py
+	venv/bin/python ./main.py
 
 clean:
 	rm -rf venv
