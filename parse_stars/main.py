@@ -1,3 +1,11 @@
+"""
+TODO:
+- move photometry stuff somewhere
+- please clean up :'( don't import *
+- clean up testing + move to plot.py
+"""
+
+
 import os
 import csv
 import itertools
@@ -28,77 +36,6 @@ logger = setup_logging()
 
 ## Functions
 
-# helper function for different functions
-# runs find_other_sources under different parameters to change the aperture
-def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
-                           extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
-
-    try:
-        target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
-                              remove_excess, plot_flag, plot_window)
-    except Exception as e:
-        logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
-        logger.error(e, exc_info=True)
-        return 1
-
-    target.data_for_target(do_roll=True, ignore_bright=0)
-
-    jj, ii = target.center
-    jj, ii = int(jj), int(ii)
-
-    img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)\
-                 [:,jj-image_region:jj+image_region, ii-image_region:ii+image_region], axis=0)
-
-    if (img.shape != (image_region*2, image_region*2)):
-        sides = []
-        if jj + image_region > target.targets.shape[0]:
-            sides += "Top"
-        if ii + image_region > target.targets.shape[1]:
-            sides += "Left"
-        img = pad_img_wrap(img, (image_region*2, image_region*2), sides)
-
-    setattr(photometry.star, 'img', img)
-
-    logger.info("run_partial_photometry done: %s" % target.kic)
-    return target
-
-# sets up photometry for a star and adds aperture to class
-def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
-                   extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
-
-    try:
-        target = photometry.star(targ, ffi_dir=ffidata_folder)
-        target.make_postcard()
-    except Exception as e:
-        logger.info("run_photometry unsuccessful: %s" % target.kic)
-        logger.error(e.message)
-        return 1
-
-    return run_partial_photometry(target, image_region, edge_lim, min_val, ntargets, \
-                                  extend_region_size, remove_excess, plot_window, plot_flag)
-
-# outputs dict of functions that finds faulty stars
-#   and kics that fall in those functions
-def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntargets=100):
-    full_dict = {}
-    full_dict["good"] = []
-    for boolean_func in boolean_funcs:
-        full_dict[boolean_func.__name__] = []
-    for targ in targets:
-        is_faulty = False
-        target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
-        if target == 1:
-            return 1
-        for boolean in boolean_funcs:
-            if boolean(target):
-                full_dict[boolean.__name__].append(target)
-                is_faulty = True
-        if not is_faulty:
-            full_dict["good"].append(target)
-    logger.info("get_boolean_stars done")
-    return full_dict
-
-
 def make_model_background(img, model_pix=15):
     ycoord = min(model_pix*2, img.shape[0])
     xcoord = min(model_pix*2, img.shape[1])
@@ -112,6 +49,8 @@ def make_model_background(img, model_pix=15):
 
     return model
 
+# TODO: NEED TO UPDATE LMAOOOO
+# TODO: WHERE THE MASK AT
 def model_background(target, model_pix):
     for i in range(target.postcard.shape[0]):
         region = target.postcard[i]
@@ -132,13 +71,13 @@ def get_median_region(arr):
     minimum = np.median(arr)
     return np.where(arr > minimum, 1, 0)
 
-def logical_and_all_args(*args):
-    result = []
+def logical_or_all_args(*args):
+    result = np.zeros_like(args[0])
     for arg in args:
-        result =+ arg
+        result += arg
     return np.where(result != 0, 1, 0)
 
-def make_background_mask_max(target, img, model_pix=15, max_factor=0.1):
+def make_background_mask_max(target, img, model_pix=15, max_factor=0.01):
     if not np.any(img):
         return -1
 
@@ -148,13 +87,9 @@ def make_background_mask_max(target, img, model_pix=15, max_factor=0.1):
                         [False, True, False, True])
     min_i, max_i, min_j, max_j = coords
 
-    maximum = np.max(img[np.nonzero(img)])
-    minimum = np.min(img[np.nonzero(img)])
-
-    max_mask = np.where(img >= (maximum-minimum)*max_factor, 1, 0)
-    # max_mask = get_median_region(img)
+    max_mask = np.where(img >= max_factor*np.max(img), 1, 0)
     targets_mask = np.where(target.targets != 0, 1, 0)[min_i:max_i, min_j:max_j]
-    mask = logical_and_all_args(max_mask, targets_mask)
+    mask = logical_or_all_args(max_mask, targets_mask)
 
     return mask
 
@@ -188,14 +123,42 @@ def make_background_mask_filter(target, img, mask_pixels=2):
 
     return mask
 
+def arr_within_bound_n_times(arr, n, bound):
+    return is_n_bools(arr, n, lambda x: x <= bound)
+
+def check_postcard_ranges(data, postcard, percentile=20):
+    """
+    want to return true/should change if:
+    - the model varies, ie minimum/maximum/avg varies
+      - aka the range of mins is higher than boundary
+      - boundary as some factor * average mins?
+    false/don't change if:
+    - model range for each postcard is too low
+      - aka the difference in one image is low in comparison to data?
+      - data = average masked background? range of background?
+    """
+    ranges = []
+    mins = []
+    maxs = []
+    for i in range(postcard.shape[0]):
+        curr_card = postcard[i]
+        ranges.append(np.ptp(curr_card))
+        mins.append(np.min(curr_card))
+        maxs.append(np.max(curr_card))
+    booleans = [is_n_bools(ranges, 52, lambda x: x == 0)
+                # , arr_within_range_n_times(mins, 1, np.percentile(mins, percentile))
+                # , arr_within_range_n_times(maxs, 1, np.percentile(maxs, percentile))
+    ]
+    return all(booleans)
+
 def testing(targ):
     image_region = 15
     mask_factor = 0.001
     fout = "./"
     model_pix = 15
-    veen = -1000
-    veep = 1000
-    wanna_save = False
+    min_img = -1000
+    max_img = 1000
+    wanna_save = True
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
@@ -232,7 +195,7 @@ def testing(targ):
 
     fig1 = plt.figure(1, figsize=(12, 6))
     plt.subplot(1, 2, 1)
-    plt.imshow(old_int, interpolation='nearest', cmap='gray', vmin=veen, vmax=veep, origin='lower')
+    plt.imshow(old_int, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
 
     run_partial_photometry(target)
 
@@ -247,6 +210,11 @@ def testing(targ):
     prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
                  scale_row=1, scale_col=1, rotation_angle=0)
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
+
+    new_post = np.zeros_like(target.postcard)
+    new_post[:] = target.postcard[:]
+
+    models = np.zeros((target.postcard.shape[0], max_i-min_i, max_j-min_j))
 
     with PdfPages(fout + targ + "_out.pdf") as pdf:
 
@@ -263,10 +231,6 @@ def testing(targ):
         pdf.savefig()
         plt.close(fig0)
 
-        ranges = []
-        mins = []
-        maxs = []
-
         for i in range(target.postcard.shape[0]):
             region = target.postcard[i]
 
@@ -277,16 +241,10 @@ def testing(targ):
             min_i, max_i, min_j, max_j = coords
             zold = region[min_i:max_i, min_j:max_j]
 
-            wow_mask = make_background_mask_filter(target, zold)
-
+            wow_mask = make_background_mask_max(target, zold)
             z = np.ma.masked_array(zold, mask=wow_mask)
-
             model = make_model_background(z)
-            print i, np.ptp(z), np.min(z), np.max(z)
-            print i, np.ptp(model), np.min(model), np.max(model)
-            ranges.append(np.ptp(model))
-            mins.append(np.min(model))
-            maxs.append(np.max(model))
+            models[i] = model
 
             if i == 0:
                 fig2 = plt.figure(2, figsize=(8, 2.5))
@@ -308,15 +266,22 @@ def testing(targ):
                     pdf.savefig()
                     plt.close(fig2)
 
-            region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
+            new_post[i, min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
-        print "HEY", targ, np.ptp(ranges), np.ptp(mins), np.ptp(maxs)
+        integrated_post = np.zeros_like(target.integrated_postcard)
 
-        target.integrated_postcard = np.sum(target.postcard, axis=0)
-        target.data_for_target(do_roll=True, ignore_bright=0)
+        if check_postcard_ranges(models):
+            print targ, "TRUE BOII"
+            integrated_post = np.sum(new_post, axis=0)
+            target.data_for_target(do_roll=True, ignore_bright=0)
+        else:
+            print targ, "FASLSESES"
+            integrated_post = target.integrated_postcard
 
-        fako = np.zeros_like(target.integrated_postcard)
-        fako[:] = target.integrated_postcard
+        # also save integrated_post (new) + new_post as part of target attrs
+
+        fako = np.zeros_like(integrated_post)
+        fako[:] = integrated_post
         fako[min_i,min_j:max_j] = maximum
         fako[max_i,min_j:max_j] = maximum
         fako[min_i:max_i,min_j] = maximum
@@ -324,7 +289,7 @@ def testing(targ):
 
         plt.figure(1)
         plt.subplot(1, 2, 2)
-        plt.imshow(fako, interpolation='nearest', cmap='gray', vmin=veen, vmax=veep, origin='lower')
+        plt.imshow(fako, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
         plt.colorbar()
         if wanna_save:
             pdf.savefig()
@@ -417,14 +382,12 @@ def main():
     ## TESTS
     np.set_printoptions(linewidth=1000, precision=1)
 
-    kics1 = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
+    # kics1 = ["8527137", "8398294", "8397644", "8398286", "8398452", "10122937", "11873617", "3116513", "3116544", "3124279", "8381999"]
+    # kics2 = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
-    # print_lc_improved_aperture(kics, "out.csv")
-    kics2 = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
     kics = ["11913365", "11913377"] + ben_kics
 
     for kic in kics:
-        # target = print_better_aperture(kic)
         testing(kic)
 
     make_sound(0.3, 440)

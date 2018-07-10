@@ -1,15 +1,68 @@
 """
 TODO:
 - comments
-- 
 """
 
+import os
 import numpy as np
+from settings import f3_location
 
 from utils import clip_array
 from settings import setup_logging
 
+os.sys.path.append(f3_location)
+from f3 import photometry
+
 logger = setup_logging()
+
+# helper function for different functions
+# runs find_other_sources under different parameters to change the aperture
+def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
+                           extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
+
+    try:
+        target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
+                              remove_excess, plot_flag, plot_window)
+    except Exception as e:
+        logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
+        logger.error(e, exc_info=True)
+        return 1
+
+    target.data_for_target(do_roll=True, ignore_bright=0)
+
+    jj, ii = target.center
+    jj, ii = int(jj), int(ii)
+
+    img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)\
+                 [:,jj-image_region:jj+image_region, ii-image_region:ii+image_region], axis=0)
+
+    if (img.shape != (image_region*2, image_region*2)):
+        sides = []
+        if jj + image_region > target.targets.shape[0]:
+            sides += "Top"
+        if ii + image_region > target.targets.shape[1]:
+            sides += "Left"
+        img = pad_img_wrap(img, (image_region*2, image_region*2), sides)
+
+    setattr(photometry.star, 'img', img)
+
+    logger.info("run_partial_photometry done: %s" % target.kic)
+    return target
+
+# sets up photometry for a star and adds aperture to class
+def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
+                   extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
+
+    try:
+        target = photometry.star(targ, ffi_dir=ffidata_folder)
+        target.make_postcard()
+    except Exception as e:
+        logger.info("run_photometry unsuccessful: %s" % target.kic)
+        logger.error(e.message)
+        return 1
+
+    return run_partial_photometry(target, image_region, edge_lim, min_val, ntargets, \
+                                  extend_region_size, remove_excess, plot_window, plot_flag)
 
 # helper function that determines 3-point pattern, but all quarters from the
 #   same channel must have the same pattern
@@ -180,8 +233,6 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
         offset_x += desired_shape[1]-img.shape[1]
     return pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
 
-
-
 def is_n_bools(arr, n, bool_func):
     n_bools = False
     for i in arr:
@@ -315,3 +366,25 @@ def calculate_better_aperture(target, mask_factor=0.001, image_region=15):
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
     improve_aperture(target, mask, image_region)
     return target
+
+# outputs dict of functions that finds faulty stars
+#   and kics that fall in those functions
+def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntargets=100):
+    full_dict = {}
+    full_dict["good"] = []
+    for boolean_func in boolean_funcs:
+        full_dict[boolean_func.__name__] = []
+    for targ in targets:
+        is_faulty = False
+        target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
+        if target == 1:
+            return 1
+        for boolean in boolean_funcs:
+            if boolean(target):
+                full_dict[boolean.__name__].append(target)
+                is_faulty = True
+        if not is_faulty:
+            full_dict["good"].append(target)
+    logger.info("get_boolean_stars done")
+    return full_dict
+
