@@ -5,7 +5,6 @@ TODO:
 - clean up testing + move to plot.py
 """
 
-
 import os
 import csv
 import itertools
@@ -45,7 +44,7 @@ def make_model_background(img, model_pix=15):
     p = fit_p(p_init, x, y, z=img)
 
     model = p(x, y)
-    model = np.clip(model, np.min(img), np.max(img))
+    # model = np.clip(model, np.min(img), np.max(img))
 
     return model
 
@@ -151,14 +150,7 @@ def check_postcard_ranges(data, postcard, percentile=20):
     ]
     return all(booleans)
 
-def testing(targ):
-    image_region = 15
-    mask_factor = 0.001
-    fout = "./"
-    model_pix = 15
-    min_img = -1000
-    max_img = 1000
-    wanna_save = True
+def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, min_img=-1000, max_img=1000, save_pdf=True):
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
@@ -169,6 +161,7 @@ def testing(targ):
         logger.error(e.message)
         return 1
 
+    # make temp vars
     old_post = np.empty_like(target.postcard)
     old_post[:] = target.postcard
 
@@ -177,7 +170,6 @@ def testing(targ):
 
     post = target.integrated_postcard
     maximum = np.max(post[np.nonzero(post)])
-    minimum = 0
 
     ai, bi, aj, bj = target.center[0]-model_pix, target.center[0]+model_pix, \
                      target.center[1]-model_pix, target.center[1]+model_pix
@@ -193,14 +185,19 @@ def testing(targ):
     old_int[min_i:max_i,min_j] = maximum
     old_int[min_i:max_i,max_j] = maximum
 
+    new_post = np.zeros_like(target.postcard)
+    new_post[:] = target.postcard[:]
+
+    models = np.zeros((target.postcard.shape[0], max_i-min_i, max_j-min_j))
+
+    # plot
     fig1 = plt.figure(1, figsize=(12, 6))
     plt.subplot(1, 2, 1)
     plt.imshow(old_int, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
 
     run_partial_photometry(target)
 
-    hey_mask = np.where(target.targets != 0, 1, 0)
-
+    # make mask to improve aperture
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
                tar.params['Channel_2'], tar.params['Channel_3']]
@@ -210,11 +207,6 @@ def testing(targ):
     prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
                  scale_row=1, scale_col=1, rotation_angle=0)
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
-
-    new_post = np.zeros_like(target.postcard)
-    new_post[:] = target.postcard[:]
-
-    models = np.zeros((target.postcard.shape[0], max_i-min_i, max_j-min_j))
 
     with PdfPages(fout + targ + "_out.pdf") as pdf:
 
@@ -234,17 +226,13 @@ def testing(targ):
         data_ranges = []
 
         for i in range(target.postcard.shape[0]):
+
+            # make model
             region = target.postcard[i]
+            z_old = region[min_i:max_i, min_j:max_j]
 
-            coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
-                                 target.center[1]-model_pix, target.center[1]+model_pix], \
-                                [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
-                                [False, True, False, True])
-            min_i, max_i, min_j, max_j = coords
-            zold = region[min_i:max_i, min_j:max_j]
-
-            wow_mask = make_background_mask_max(target, zold)
-            z = np.ma.masked_array(zold, mask=wow_mask)
+            mask = make_background_mask_max(target, z_old)
+            z = np.ma.masked_array(z_old, mask=mask)
             model = make_model_background(z)
             models[i] = model
 
@@ -253,9 +241,8 @@ def testing(targ):
             if i == 0:
                 fig2 = plt.figure(2, figsize=(8, 2.5))
                 plt.subplot(1, 4, 1)
-                plt.imshow(wow_mask, cmap='gray', vmin=0, vmax=1, origin='lower')
+                plt.imshow(mask, cmap='gray', vmin=0, vmax=1, origin='lower')
                 plt.title("Mask")
-
                 plt.subplot(1, 4, 2)
                 plt.imshow(z,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Data")
@@ -266,31 +253,56 @@ def testing(targ):
                 plt.imshow(z - model, interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Residual")
                 plt.colorbar()
-                if wanna_save:
+                if save_pdf:
                     pdf.savefig()
                     plt.close(fig2)
 
             new_post[i, min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
-        integrated_post = np.zeros_like(target.integrated_postcard)
-
+        # print information about model
         ranges = []
         mins = []
         maxs = []
+        avgs = []
         for i in range(models.shape[0]):
             curr_card = models[i]
             ranges.append(np.ptp(curr_card))
             mins.append(np.min(curr_card))
             maxs.append(np.max(curr_card))
-        # print ranges
-        # print data_ranges
-        print np.ptp(ranges)
-        print np.ptp(data_ranges)
-        print np.ptp(mins)
-        print np.ptp(maxs)
+            avgs.append(np.average(curr_card))
 
-        integrated_post = np.sum(new_post, axis=0)
+        print targ
+        print np.ptp(ranges), np.std(ranges), np.var(ranges)
+        print np.diff(ranges)
+        print np.ptp(data_ranges), np.std(data_ranges), np.var(data_ranges)
+        print np.diff(data_ranges)
+        print np.ptp(mins), np.std(mins), np.var(mins)
+        print np.diff(mins)
+        print np.ptp(maxs), np.std(maxs), np.var(maxs)
+        print np.diff(maxs)
+        print np.ptp(avgs), np.std(avgs), np.var(avgs)
+        print np.diff(avgs)
+        print np.average(np.diff(ranges)), np.average(mins), np.average(maxs), np.average(avgs)
+        print np.var(mins)/np.ptp(mins), np.var(maxs)/np.ptp(maxs), np.var(avgs)/np.ptp(avgs)
+
+        bool_names = ["4x 20% of range mins", "4x 20% of range max", "4x 20% of range avgs", "4x 20% of avg mins", "4x 20% of avg maxs", "4x 20% of avg avgs"]
+        bool_res = [is_n_bools(np.abs(np.diff(mins)), 4, lambda x: x >= 0.2*np.ptp(mins)) \
+                    , is_n_bools(np.abs(np.diff(maxs)), 4, lambda x: x >= 0.2*np.ptp(maxs)) \
+                    , is_n_bools(np.abs(np.diff(avgs)), 4, lambda x: x >= 0.2*np.ptp(avgs)) \
+                    , is_n_bools(np.abs(np.diff(mins)), 4, lambda x: x >= 0.2*np.average(mins)) \
+                    , is_n_bools(np.abs(np.diff(maxs)), 4, lambda x: x >= 0.2*np.average(maxs)) \
+                    , is_n_bools(np.abs(np.diff(avgs)), 4, lambda x: x >= 0.2*np.average(avgs)) \
+        ]
+
+        # finalise new postcard
+        calculated_int_post = np.zeros_like(target.integrated_postcard)
+        calculated_int_post = np.sum(new_post, axis=0)
+        target.integrated_postcard = calculated_int_post # not part of final
+        target.postcard = new_post # not part of final
         target.data_for_target(do_roll=True, ignore_bright=0)
+
+        # TODO: also save integrated_post (new) + new_post as part of target attrs
+        # TODO: check if should prodceed with model subtraction or not
 
         # if check_postcard_ranges(models):
         #     print targ, "TRUE BOII"
@@ -300,20 +312,20 @@ def testing(targ):
         #     print targ, "FASLSESES"
         #     integrated_post = target.integrated_postcard
 
-        # also save integrated_post (new) + new_post as part of target attrs
 
-        fako = np.zeros_like(integrated_post)
-        fako[:] = integrated_post
-        fako[min_i,min_j:max_j] = maximum
-        fako[max_i,min_j:max_j] = maximum
-        fako[min_i:max_i,min_j] = maximum
-        fako[min_i:max_i,max_j] = maximum
+        # plot rest of stuff
+        temp_int_post = np.zeros_like(calculated_int_post)
+        temp_int_post[:] = calculated_int_post
+        temp_int_post[min_i,min_j:max_j] = maximum
+        temp_int_post[max_i,min_j:max_j] = maximum
+        temp_int_post[min_i:max_i,min_j] = maximum
+        temp_int_post[min_i:max_i,max_j] = maximum
 
         plt.figure(1)
         plt.subplot(1, 2, 2)
-        plt.imshow(fako, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
+        plt.imshow(temp_int_post, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
         plt.colorbar()
-        if wanna_save:
+        if save_pdf:
             pdf.savefig()
             plt.close(fig1)
         else:
@@ -325,6 +337,31 @@ def testing(targ):
                        ha='center', fontsize = 11)
         pdf.savefig()
         plt.close("all")
+
+        return bool_names, bool_res
+
+def print_arr_nicely(arr, sep="\t"):
+    return sep.join( i.__class__==string and i or str(i) for i in x )
+
+def print_dict_res(kics, bool_names, all_res, real_res):
+    print_arr_nicely(["BOOLEAN NAMES:      "] + kics, "\t")
+
+    """
+    all_res = [[true, false, true], [false, true, true], ...]
+    want:
+                kic kic kic
+    real_res    t   f   t
+    bool_name   t   f   t
+    """
+
+    for i, bool_name in enumerate(bool_names):
+        curr_arr = []
+        curr_arr.append(bool_name)
+        for j in range(len(kics)):
+            curr_arr.append(all_res[j][i])
+        print_arr_nicely(curr_arr, "\t")
+
+    print_arr_nicely("real results" + real_res)
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -408,9 +445,20 @@ def main():
     # kics2 = ["8462852", "8115021", "8250547", "8250550", "8381999", "9091942"]
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     kics = ["11913365", "11913377"] + ben_kics
+    # kics = ["11913365", "11913377"] + ["4555566", "4726114", "6708110", "8345997", "8759594", "9306271", "11415049", "11873617", "12417799"]
+
+    all_res = []
+    real_res = [True, True] + [False]*3 + [True]*2 + [False]*4 + [True] + [False]*6 + [True]*2 + [False] + [True] + [False]*4 + [True]*2 + [False]
+
+    if len(real_res) != len(kics):
+        print "real_res len needs to be same as kics len!"
+        return 0
 
     for kic in kics:
-        testing(kic)
+        bool_names, bool_res = testing(kic)
+        all_res.append(bool_res)
+
+    print_dict_res(kics, bool_names, all_res, real_res)
 
     make_sound(0.3, 440)
     logger.info("### everything done ###")
