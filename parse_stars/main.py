@@ -44,8 +44,6 @@ def make_model_background(img, model_pix=15):
     p = fit_p(p_init, x, y, z=img)
 
     model = p(x, y)
-    # model = np.clip(model, np.min(img), np.max(img))
-
     return model
 
 # TODO: NEED TO UPDATE LMAOOOO
@@ -262,6 +260,12 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
             new_post[i, min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
+        # save stuff
+        save_post = np.zeros_like(target.postcard)
+        save_post[:] = target.postcard
+        save_int_post = np.zeros_like(target.integrated_postcard)
+        save_int_post[:] = target.integrated_postcard
+
         # finalise new postcard
         calculated_int_post = np.zeros_like(target.integrated_postcard)
         calculated_int_post = np.sum(new_post, axis=0)
@@ -322,6 +326,12 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         #     integrated_post = target.integrated_postcard
 
 
+        # temp boolean solution to proceed with model or not
+        if not np.nanmean(new_uncerts) <= np.nanmean(old_uncerts):
+            target.postcard = save_post
+            target.integrated_postcard = save_int_post
+            target.data_for_target(do_roll=True, ignore_bright=0)
+
         # plot rest of stuff
         temp_int_post = np.zeros_like(calculated_int_post)
         temp_int_post[:] = calculated_int_post
@@ -355,7 +365,7 @@ def calculate_accuracy(real_arr, res_arr):
     for i, res in enumerate(res_arr):
         if res == real_arr[i]:
             accurates += 1
-    return accurates/total
+    return accurates/float(total)
 
 def format_arr(arr, sep="\t"):
     return sep.join(str(i) for i in arr)

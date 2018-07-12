@@ -1,3 +1,9 @@
+"""
+TODO:
+- make general function to parse filename_stellar_params
+- JUST FIX IT UP
+"""
+
 from utils import does_path_exists
 from settings import setup_logging
 

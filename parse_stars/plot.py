@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 from matplotlib import gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
 
+from aperture import improve_aperture, calculate_better_aperture
 from settings import setup_logging
 
 logger = setup_logging()
@@ -160,6 +161,22 @@ def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000, \
             plt.close()
     logger.info("get_better_apertures done")
     return
+
+def print_lc_improved_aperture(kics, fout, image_region=15):
+    with open(fout, "w") as f:
+        writer = csv.writer(f, delimiter=',', lineterminator='\n')
+        for kic in kics:
+            target = run_photometry(kic)
+            if target == 1:
+                return
+            mask = calculate_better_aperture(target, image_region=image_region)
+            improve_aperture(target, mask=mask, image_region=image_region)
+            #target.times
+            arr = np.concatenate([np.asarray([kic]), target.obs_flux, target.flux_uncert, \
+                                  target.img.flatten()])
+            writer.writerow(arr)
+    logger.info("print_lc_improved_aperture done")
+    return 0
 
 # TODO: function
 def print_best_apertures(targ, edge_lim=0.015, min_val=5000, extend_region_size=3, \

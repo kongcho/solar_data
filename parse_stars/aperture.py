@@ -1,13 +1,8 @@
-"""
-TODO:
-- comments
-"""
-
 import os
 import numpy as np
 from settings import f3_location
 
-from utils import clip_array
+from utils import clip_array, is_n_bools
 from settings import setup_logging
 
 os.sys.path.append(f3_location)
@@ -209,7 +204,7 @@ def fake_bool(target):
     logger.info("fake_bool done")
     return True
 
-# TODO: helper function
+# helper function for improve_aperture, pads any image to desired shape with pad_val
 def pad_img(img, desired_shape, positions, pad_val=0):
     if len(desired_shape) != len(positions):
         logger.error("pad_img: odd required shape dimensions")
@@ -223,7 +218,7 @@ def pad_img(img, desired_shape, positions, pad_val=0):
         pads.append((position, pad_len))
     return np.pad(img, pads, mode='constant', constant_values=pad_val)
 
-# TODO: function
+# wrapper for pad_img to determine position of the image (top, bottom, left, right)
 def pad_img_wrap(img, desired_shape, sides, pad_val=0):
     offset_x = 0
     offset_y = 0
@@ -233,16 +228,8 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
         offset_x += desired_shape[1]-img.shape[1]
     return pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
 
-def is_n_bools(arr, n, bool_func):
-    n_bools = False
-    for i in arr:
-        if bool_func(i):
-            n -= 1
-        if n == 0:
-            n_bools = True
-            break
-    return n_bools
 
+# helper function for remove_second_star, determines how second star is detected
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
     min_bright = factor * (np.max(img)) #- np.min(img[np.nonzero(img)]))
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
@@ -253,6 +240,7 @@ def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
                 ]
     return all(booleans)
 
+# helper function for improve_aperture, removes any detected second stars
 def remove_second_star(img, min_factor):
     removes = []
     for i in range(1, img.shape[0]-1):
@@ -265,18 +253,7 @@ def remove_second_star(img, min_factor):
         img[i, j] = 0
     return img
 
-def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
-    new_arr = arr if is_decreasing else np.flip(arr, 0)
-    diffs = np.diff(new_arr)
-    length = range(len(diffs))
-    lengths = []
-    for start_i in range(relax_pixels):
-        lengths.append(length[start_i:])
-    for i, diff in enumerate(zip(*lengths)):
-        if all(diffs[list(diff)] > diff_flux) and not (arr[i] == 0 and all(arr[[i-1, i+1]] != 0)):
-            return diff[0] if is_decreasing else len(arr)-(diff[-1]+1)
-    return -1 if is_decreasing else 0
-
+# inserts new aperture in the target information and data
 def img_to_new_aperture(target, img, image_region=15):
     target.img = img
     ii, jj = target.center
@@ -293,6 +270,21 @@ def img_to_new_aperture(target, img, image_region=15):
                 target.targets[big_i, big_j] = 0
     return img
 
+# helper function for isolate_star_cycle
+def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
+    new_arr = arr if is_decreasing else np.flip(arr, 0)
+    diffs = np.diff(new_arr)
+    length = range(len(diffs))
+    lengths = []
+    for start_i in range(relax_pixels):
+        lengths.append(length[start_i:])
+    for i, diff in enumerate(zip(*lengths)):
+        if all(diffs[list(diff)] > diff_flux) and not (arr[i] == 0 and all(arr[[i-1, i+1]] != 0)):
+            return diff[0] if is_decreasing else len(arr)-(diff[-1]+1)
+    return -1 if is_decreasing else 0
+
+# helper function for improve_aperture, removes other potential stars
+# relax_pixels is how relaxed the function is
 def isolate_star_cycle(img, ii, jj, image_region=15, relax_pixels=2):
     len_x = img.shape[1]
     len_y = img.shape[0]
@@ -323,7 +315,8 @@ def isolate_star_cycle(img, ii, jj, image_region=15, relax_pixels=2):
 
     return img
 
-def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
+# main function to improve aperture and remove other stars from initial apertures
+def improve_aperture(target, mask=None, image_region=15, relax_pixels=2, second_factor=0.7):
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
 
@@ -347,7 +340,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
         run_cycle = np.any(np.subtract(img_save, img_cycle))
         img_save = img_cycle
 
-    remove_second_star(img_save, 0.7)
+    remove_second_star(img_save, second_factor)
 
     img_to_new_aperture(target, img_save, image_region)
     target.data_for_target(do_roll=True, ignore_bright=0)
@@ -355,6 +348,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2):
     logger.info("improve_aperture done")
     return target.img
 
+# creates mask to overlay aperture with from rough psf from lightkurve package
 def calculate_better_aperture(target, mask_factor=0.001, image_region=15):
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
@@ -364,8 +358,7 @@ def calculate_better_aperture(target, mask_factor=0.001, image_region=15):
     prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
                  scale_row=1, scale_col=1, rotation_angle=0)
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
-    improve_aperture(target, mask, image_region)
-    return target
+    return mask
 
 # outputs dict of functions that finds faulty stars
 #   and kics that fall in those functions

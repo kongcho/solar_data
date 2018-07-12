@@ -119,6 +119,7 @@ def array_to_file(arr, fout, kids_per_file=9999, bypass_prompt=True):
     logger.info("array_to_file done")
     return total_kids
 
+# gets dimension of nest array
 def get_dim(arr):
     if not type(arr[0]) == list:
         return 1
@@ -158,3 +159,14 @@ def clip_array(coords, max_coords, is_max_bounds):
             add = (coord,) if coord > max_coords[i] else (max_coords[i],)
         results += add
     return results
+
+# calculates if elements of array satisfies boolean function at least n times
+def is_n_bools(arr, n, bool_func):
+    n_bools = False
+    for i in arr:
+        if bool_func(i):
+            n -= 1
+        if n == 0:
+            n_bools = True
+            break
+    return n_bools
