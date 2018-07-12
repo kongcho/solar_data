@@ -223,6 +223,9 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         pdf.savefig()
         plt.close(fig0)
 
+        old_uncerts = np.zeros_like(target.flux_uncert)
+        old_uncerts[:] = target.flux_uncert
+
         data_ranges = []
 
         for i in range(target.postcard.shape[0]):
@@ -259,7 +262,18 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
             new_post[i, min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
+        # finalise new postcard
+        calculated_int_post = np.zeros_like(target.integrated_postcard)
+        calculated_int_post = np.sum(new_post, axis=0)
+        target.integrated_postcard = calculated_int_post # not part of final
+        target.postcard = new_post # not part of final
+        target.data_for_target(do_roll=True, ignore_bright=0)
+
         # print information about model
+
+        new_uncerts = np.zeros_like(target.flux_uncert)
+        new_uncerts[:] = target.flux_uncert
+
         ranges = []
         mins = []
         maxs = []
@@ -285,21 +299,16 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         print np.average(np.diff(ranges)), np.average(mins), np.average(maxs), np.average(avgs)
         print np.var(mins)/np.ptp(mins), np.var(maxs)/np.ptp(maxs), np.var(avgs)/np.ptp(avgs)
 
-        bool_names = ["4x 20% of range mins", "4x 20% of range max", "4x 20% of range avgs", "4x 20% of avg mins", "4x 20% of avg maxs", "4x 20% of avg avgs"]
+        bool_names = ["4x 20% of ran mins", "4x 20% of ran maxs", "4x 20% of ran avgs", "4x 20% of avg mins", "4x 20% of avg maxs", "4x 20% of avg avgs", "lower nanmean stds", "lower max stds    "]
         bool_res = [is_n_bools(np.abs(np.diff(mins)), 4, lambda x: x >= 0.2*np.ptp(mins)) \
                     , is_n_bools(np.abs(np.diff(maxs)), 4, lambda x: x >= 0.2*np.ptp(maxs)) \
                     , is_n_bools(np.abs(np.diff(avgs)), 4, lambda x: x >= 0.2*np.ptp(avgs)) \
                     , is_n_bools(np.abs(np.diff(mins)), 4, lambda x: x >= 0.2*np.average(mins)) \
-                    , is_n_bools(np.abs(np.diff(maxs)), 4, lambda x: x >= 0.2*np.average(maxs)) \
-                    , is_n_bools(np.abs(np.diff(avgs)), 4, lambda x: x >= 0.2*np.average(avgs)) \
+                    , is_n_bools(np.abs(np.diff(maxs)), 3, lambda x: x >= 0.2*np.average(maxs)) \
+                    , is_n_bools(np.abs(np.diff(avgs)), 3, lambda x: x >= 0.2*np.average(avgs)) \
+                    , np.nanmean(new_uncerts) <= np.nanmean(old_uncerts) \
+                    , is_std_better_biggest(old_uncerts, new_uncerts) \
         ]
-
-        # finalise new postcard
-        calculated_int_post = np.zeros_like(target.integrated_postcard)
-        calculated_int_post = np.sum(new_post, axis=0)
-        target.integrated_postcard = calculated_int_post # not part of final
-        target.postcard = new_post # not part of final
-        target.data_for_target(do_roll=True, ignore_bright=0)
 
         # TODO: also save integrated_post (new) + new_post as part of target attrs
         # TODO: check if should prodceed with model subtraction or not
@@ -340,28 +349,34 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
         return bool_names, bool_res
 
-def print_arr_nicely(arr, sep="\t"):
-    return sep.join( i.__class__==string and i or str(i) for i in x )
+def calculate_accuracy(real_arr, res_arr):
+    accurates = 0
+    total = len(res_arr)
+    for i, res in enumerate(res_arr):
+        if res == real_arr[i]:
+            accurates += 1
+    return accurates/total
+
+def format_arr(arr, sep="\t"):
+    return sep.join(str(i) for i in arr)
 
 def print_dict_res(kics, bool_names, all_res, real_res):
-    print_arr_nicely(["BOOLEAN NAMES:      "] + kics, "\t")
-
-    """
-    all_res = [[true, false, true], [false, true, true], ...]
-    want:
-                kic kic kic
-    real_res    t   f   t
-    bool_name   t   f   t
-    """
+    print format_arr(["BOOLEAN NAMES:   "] + kics, "\t")
 
     for i, bool_name in enumerate(bool_names):
+        formatted_arr = []
         curr_arr = []
-        curr_arr.append(bool_name)
+        formatted_arr.append(bool_name)
         for j in range(len(kics)):
+            formatted_arr.append(str(all_res[j][i]) + "\t")
             curr_arr.append(all_res[j][i])
-        print_arr_nicely(curr_arr, "\t")
+        print format_arr(formatted_arr, "\t")
+        print "\t\t\t\t%.3f" % calculate_accuracy(real_res, curr_arr)
+        if curr_arr == real_res:
+            print "\t HEY the results match!! for " +  str(kics[j])
 
-    print_arr_nicely("real results" + real_res)
+    real_res = [str(x) + "\t" for x in real_res]
+    print format_arr(["real results      "] + real_res)
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -455,7 +470,7 @@ def main():
         return 0
 
     for kic in kics:
-        bool_names, bool_res = testing(kic)
+        bool_names, bool_res = testing(kic, save_pdf=True)
         all_res.append(bool_res)
 
     print_dict_res(kics, bool_names, all_res, real_res)
