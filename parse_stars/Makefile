@@ -5,6 +5,9 @@ setup:
 run:
 	venv/bin/python ./main.py
 
+model:
+	venv/bin/python ./model.py
+
 clean:
 	rm -rf venv
 	rm -f *.pyc

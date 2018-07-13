@@ -11,4 +11,5 @@ parse_stars/venv
 *\.zip
 *\.rar
 
-parse_stars/demo.ipynb
+.ipynb_checkpoints/
+make_model.ipynb

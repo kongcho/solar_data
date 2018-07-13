@@ -3,7 +3,7 @@ import numpy as np
 from settings import f3_location
 
 from utils import clip_array, is_n_bools
-from settings import setup_logging
+from settings import setup_logging, ffidata_folder
 
 os.sys.path.append(f3_location)
 from f3 import photometry
@@ -19,7 +19,7 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
         target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
                               remove_excess, plot_flag, plot_window)
     except Exception as e:
-        logger.info("run_partial_photometry unsuccessful: %s" % target.kic)
+        logger.info("unsuccessful: %s" % target.kic)
         logger.error(e, exc_info=True)
         return 1
 
@@ -41,7 +41,7 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
 
     setattr(photometry.star, 'img', img)
 
-    logger.info("run_partial_photometry done: %s" % target.kic)
+    logger.info("done: %s" % target.kic)
     return target
 
 # sets up photometry for a star and adds aperture to class
@@ -52,7 +52,7 @@ def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets
         target = photometry.star(targ, ffi_dir=ffidata_folder)
         target.make_postcard()
     except Exception as e:
-        logger.info("run_photometry unsuccessful: %s" % target.kic)
+        logger.info("unsuccessful: %s" % targ)
         logger.error(e.message)
         return 1
 
@@ -135,9 +135,9 @@ def is_large_ap(target):
     channels = [blacks, reds, blues, greens]
     for channel in channels:
         if is_more_or_less(target, channel) != 0:
-            logger.info("is_large_ap True")
+            logger.info("True")
             return True
-    logger.info("is_large_ap False")
+    logger.info("False")
     return False
 
 # helper function for has_close_peaks: is peak if greater than all neighbours
@@ -181,9 +181,9 @@ def has_close_peaks(target, diff=7, min_factor=1, avoid_pixels=0):
             if is_peak(img[c_i, c_j], img[i, j], img[i, j-1], img[i, j+1], \
                        img[i-1, j], img[i+1, j], min_factor):
                 peaks.append((i, j))
-                logger.info("has_close_peaks True")
+                logger.info("True")
     if len(peaks) == 0:
-        logger.info("has_close_peaks False")
+        logger.info("False")
     return any(peaks)
 
 # boolean function: poor estimate for faint stars based on aperture
@@ -196,12 +196,12 @@ def is_faint_rough(target, limit=5500000):
             if target.img[i][j] != 0.0 and target.img[i][j] >= limit:
                 is_faint = False
                 break
-    logger.info("is_faint done: %s" % is_faint)
+    logger.info("%s" % is_faint)
     return is_faint
 
 # boolean function: always passes every star, for testing
 def fake_bool(target):
-    logger.info("fake_bool done")
+    logger.info("done")
     return True
 
 # helper function for improve_aperture, pads any image to desired shape with pad_val
@@ -227,7 +227,6 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
     if "Left" in sides:
         offset_x += desired_shape[1]-img.shape[1]
     return pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
-
 
 # helper function for remove_second_star, determines how second star is detected
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
@@ -345,7 +344,7 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2, second_
     img_to_new_aperture(target, img_save, image_region)
     target.data_for_target(do_roll=True, ignore_bright=0)
 
-    logger.info("improve_aperture done")
+    logger.info("done")
     return target.img
 
 # creates mask to overlay aperture with from rough psf from lightkurve package
@@ -378,6 +377,6 @@ def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntarg
                 is_faulty = True
         if not is_faulty:
             full_dict["good"].append(target)
-    logger.info("get_boolean_stars done")
+    logger.info("done")
     return full_dict
 

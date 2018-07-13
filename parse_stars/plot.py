@@ -37,7 +37,7 @@ def plot_data(target, count=0):
     fig.text(7.5/8.5, 0.5/11., str(count + 1), ha='center', fontsize = 12)
     fig.tight_layout()
 
-    logger.info("plot_data done")
+    logger.info("done")
     return fig
 
 # helper function for plot_targets that sets up photometry of a star
@@ -79,7 +79,7 @@ def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
                 logger.info(str(count) + "\t" + targ + "\tplot_done")
                 count += 1
     logger.info(str(count - 1) + " out of " + str(total) + " targets plotted")
-    logger.info("plot_targets done")
+    logger.info("done")
     return parsed_targets
 
 # TODO: function
@@ -111,7 +111,7 @@ def print_better_aperture(targ, mask_factor=0.001, image_region=15, fout="./"):
         pdf.savefig()
         plt.close()
 
-    logger.info("print_better_aperture done")
+    logger.info("done")
     return target
 
 def is_std_better_biggest(old_stds, stds):
@@ -159,7 +159,7 @@ def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000, \
             plt.gcf().text(4/8.5, 1/11., str(res), ha='center', fontsize = 11)
             pdf.savefig()
             plt.close()
-    logger.info("get_better_apertures done")
+    logger.info("done")
     return
 
 def print_lc_improved_aperture(kics, fout, image_region=15):
@@ -175,7 +175,7 @@ def print_lc_improved_aperture(kics, fout, image_region=15):
             arr = np.concatenate([np.asarray([kic]), target.obs_flux, target.flux_uncert, \
                                   target.img.flatten()])
             writer.writerow(arr)
-    logger.info("print_lc_improved_aperture done")
+    logger.info("done")
     return 0
 
 # TODO: function
@@ -238,5 +238,5 @@ def print_best_apertures(targ, edge_lim=0.015, min_val=5000, extend_region_size=
         pdf.savefig()
         pdf2.savefig()
         plt.close()
-    logger.info("get_best_apertures done")
+    logger.info("done")
     return 0

@@ -25,13 +25,14 @@ from astropy.modeling import models, fitting
 # from settings import setup_logging, f3_location, ffidata_folder
 # from plot import plot_data
 
+from utils import *
 from settings import *
 from aperture import *
 from data import *
 from parse import *
 from plot import *
 
-logger = setup_logging()
+logger = setup_main_logging()
 
 ## Functions
 
@@ -480,7 +481,7 @@ def main():
         return 0
 
     for kic in kics:
-        bool_names, bool_res = testing(kic, save_pdf=True)
+        bool_names, bool_res = testing(kic, save_pdf=True, fout="./tests/")
         all_res.append(bool_res)
 
     print_dict_res(kics, bool_names, all_res, real_res)
@@ -489,7 +490,7 @@ def main():
     logger.info("### everything done ###")
     return 0
 
-if __name__ == "__main__": # and __package__ is None:
+if __name__ == "__main__":
     os.sys.path.append(f3_location)
     from f3 import photometry
     main()
