@@ -17,7 +17,6 @@ def make_1D_model(x, y, model, fitting, label="", *args, **kwargs):
     fit = fitting
     m = fit(init, x, y)
     model = m(x)
-
     return model, label
 
 def plot_many_lines(x, y, yerr=None, titles=None, *models):
