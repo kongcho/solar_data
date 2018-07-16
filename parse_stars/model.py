@@ -6,13 +6,23 @@ from aperture import run_photometry
 from settings import setup_main_logging
 logger = setup_main_logging()
 
-def build_errorbars(err, x, qs):
-    error_list = np.zeros_like(x)
-    for i in range(len(err)):
-        g = np.where(qs == i)[0]
-        error_list[g] += err[i]
+from scipy import optimize
 
-def make_1D_model(x, y, model, fitting, label="", *args, **kwargs):
+def sine_model(x, inits):
+    return inits[0]*np.sin(2*np.pi*inits[1]*x + inits[2])
+
+def log_model(x, inits):
+    return inits[0] + inits[1]*np.log(x)
+
+def simple_err_func(x, y, fit_func, init_arr):
+    return fit_func(init_arr, x) - y
+
+def make_scipy_model(x, y, fit_func, err_func, init_arr):
+    p, success = optimize.leastsq(err_func, init_arr[:], args=(x, y))
+    model = fit_func(p, x)
+    return model
+
+def make_astropy_model(x, y, model, fitting, label="", *args, **kwargs):
     init = model(*args, **kwargs)
     fit = fitting
     m = fit(init, x, y)
@@ -61,11 +71,14 @@ def determine_accuracy(x, y, model):
     return accuracy
 
 def run_through_models(target, x, y, yerr):
-    reses = []
-    reses.append(make_1D_model(x, y, models.Sine1D, fitting.LevMarLSQFitter(), "Sine1D", frequency=0.001))
-    reses.append(make_1D_model(x, y, models.Polynomial1D, fitting.LevMarLSQFitter(), "Polynomial1D", 3))
-    reses.append(make_1D_model(x, y, models.Linear1D, fitting.LinearLSQFitter(), "Linear1D"))
-    reses.append(make_1D_model(x, y, models.Const1D, fitting.LinearLSQFitter(), "Const1D"))
+    reses = [make_astropy_model(x, y, models.Const1D, fitting.LinearLSQFitter(), "Const1D") \
+             # , make_astropy_model(x, y, models.Linear1D, fitting.LinearLSQFitter(), "Linear1D") \
+             # , make_astropy_model(x, y, models.Polynomial1D, fitting.LevMarLSQFitter(), "Polynomial1D", 3)) \
+             , make_astropy_model(x, y, models.PowerLaw1D, fitting. LevMarLSQFitter(), "PowerLaw1D", alpha=0.01) \
+             ]
+
+    # for freq in np.arange(0, 0.01, 0.001):
+    #     reses.append(make_astropy_model(x, y, models.Sine1D, fitting.LevMarLSQFitter(), "Sine1D %f" % freq, frequency=freq))
 
     mods = []
     labs = []
@@ -81,19 +94,59 @@ def run_through_models(target, x, y, yerr):
     plt.show()
     plt.close("all")
 
-    print labs
-    print accs
+    best_i = np.argmin(accs)
+
+    print "BEST FIT for %s is %s: %f" % (target.kic, labs[best_i], accs[best_i])
 
     return accs
 
-def main():
-    targ = "3236788"
-    target = run_photometry(targ)
+def build_errorbars(err, x, qs):
+    error_list = np.zeros_like(x)
+    for i in range(len(err)):
+        g = np.where(qs == i)[0]
+        error_list[g] += err[i]
 
-    y = target.obs_flux-1
-    x = target.times
-    yerr = build_errorbars(target.flux_uncert, x, target.qs)
-    run_through_models(target, x, y, yerr)
+def main():
+    ben_kics = ["2694810"
+                , "3236788"
+                , "3743810"
+                , "4555566"
+                , "4726114"
+                , "5352687"
+                , "5450764"
+                , "6038355"
+                , "6263983"
+                , "6708110"
+                , "7272437"
+                , "7432092"
+                , "7433192"
+                , "7678238"
+                , "8041424"
+                , "8043142"
+                , "8345997"
+                , "8759594"
+                , "8804069"
+                , "9306271"
+                , "10087863"
+                , "10122937"
+                , "11014223"
+                , "11033434"
+                , "11415049"
+                , "11873617"
+                , "12417799"
+                ]
+
+    kics = ben_kics
+
+    for targ in kics:
+        target = run_photometry(targ)
+        if target == 1:
+            continue
+
+        y = target.obs_flux-1
+        x = target.times
+        yerr = build_errorbars(target.flux_uncert, x, target.qs)
+        run_through_models(target, x, y, yerr)
 
     return 0
 
