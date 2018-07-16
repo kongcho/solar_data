@@ -36,12 +36,32 @@ logger = setup_main_logging()
 
 ## Functions
 
+def build_dict(keys, values):
+    dic = {}
+    for i, key in enumerate(keys):
+        if key == u'c0_0' or key == u'c2_0':
+            dic[key] = values[i]
+    return dic
+
 def make_model_background(img, model_pix=15):
     ycoord = min(model_pix*2, img.shape[0])
     xcoord = min(model_pix*2, img.shape[1])
     y, x = np.mgrid[:ycoord, :xcoord]
     p_init = models.Polynomial2D(degree=2)
     fit_p = fitting.LinearLSQFitter()
+    p = fit_p(p_init, x, y, z=img)
+
+    dic = build_dict(p.param_names, p.parameters)
+
+    model = p(x, y)
+    return model, dic
+
+def make_fixed_background(img, fixed_dic, model_pix=15):
+    ycoord = min(model_pix*2, img.shape[0])
+    xcoord = min(model_pix*2, img.shape[1])
+    y, x = np.mgrid[:ycoord, :xcoord]
+    p_init = models.Polynomial2D(degree=2, fixed=fixed_dic)
+    fit_p = fitting.LevMarLSQFitter()
     p = fit_p(p_init, x, y, z=img)
 
     model = p(x, y)
@@ -58,7 +78,7 @@ def model_background(target, model_pix):
                             [False, True, False, True])
         min_i, max_i, min_j, max_j = coords
         img = region[min_i:max_i, min_j:max_j]
-        model = make_model_background(img)
+        model, dic = make_model_background(img)
         region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
     target.integrated_postcard = np.sum(target.postcard, axis=0)
@@ -161,6 +181,7 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         return 1
 
     # make temp vars
+
     old_post = np.empty_like(target.postcard)
     old_post[:] = target.postcard
 
@@ -178,6 +199,8 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
                         [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
                         [False, True, False, True])
     min_i, max_i, min_j, max_j = coords
+
+    int_model, dic = make_model_background(target.integrated_postcard[min_i:max_i, min_j:max_j])
 
     old_int[min_i,min_j:max_j] = maximum
     old_int[max_i,min_j:max_j] = maximum
@@ -235,23 +258,31 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
             mask = make_background_mask_max(target, z_old)
             z = np.ma.masked_array(z_old, mask=mask)
-            model = make_model_background(z)
+            model = make_fixed_background(z, dic)
             models[i] = model
 
             data_ranges.append(np.ptp(z))
 
             if i == 0:
-                fig2 = plt.figure(2, figsize=(8, 2.5))
-                plt.subplot(1, 4, 1)
+                n = 5
+                fig2 = plt.figure(2, figsize=(10, 4))
+                plt.subplot(1, n, 1)
                 plt.imshow(mask, cmap='gray', vmin=0, vmax=1, origin='lower')
                 plt.title("Mask")
-                plt.subplot(1, 4, 2)
+
+                plt.subplot(1, n, 2)
                 plt.imshow(z,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Data")
-                plt.subplot(1, 4, 3)
+
+                plt.subplot(1, n, 3)
                 plt.imshow(model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
-                plt.title("Model")
-                plt.subplot(1, 4, 4)
+                plt.title("Whole Model")
+
+                plt.subplot(1, n, 4)
+                plt.imshow(model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
+                plt.title("Single Model")
+
+                plt.subplot(1, n, 5)
                 plt.imshow(z - model, interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Residual")
                 plt.colorbar()
@@ -290,19 +321,19 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
             maxs.append(np.max(curr_card))
             avgs.append(np.average(curr_card))
 
-        print targ
-        print np.ptp(ranges), np.std(ranges), np.var(ranges)
-        print np.diff(ranges)
-        print np.ptp(data_ranges), np.std(data_ranges), np.var(data_ranges)
-        print np.diff(data_ranges)
-        print np.ptp(mins), np.std(mins), np.var(mins)
-        print np.diff(mins)
-        print np.ptp(maxs), np.std(maxs), np.var(maxs)
-        print np.diff(maxs)
-        print np.ptp(avgs), np.std(avgs), np.var(avgs)
-        print np.diff(avgs)
-        print np.average(np.diff(ranges)), np.average(mins), np.average(maxs), np.average(avgs)
-        print np.var(mins)/np.ptp(mins), np.var(maxs)/np.ptp(maxs), np.var(avgs)/np.ptp(avgs)
+        # print targ
+        # print np.ptp(ranges), np.std(ranges), np.var(ranges)
+        # print np.diff(ranges)
+        # print np.ptp(data_ranges), np.std(data_ranges), np.var(data_ranges)
+        # print np.diff(data_ranges)
+        # print np.ptp(mins), np.std(mins), np.var(mins)
+        # print np.diff(mins)
+        # print np.ptp(maxs), np.std(maxs), np.var(maxs)
+        # print np.diff(maxs)
+        # print np.ptp(avgs), np.std(avgs), np.var(avgs)
+        # print np.diff(avgs)
+        # print np.average(np.diff(ranges)), np.average(mins), np.average(maxs), np.average(avgs)
+        # print np.var(mins)/np.ptp(mins), np.var(maxs)/np.ptp(maxs), np.var(avgs)/np.ptp(avgs)
 
         bool_names = ["4x 20% of ran mins", "4x 20% of ran maxs", "4x 20% of ran avgs", "4x 20% of avg mins", "4x 20% of avg maxs", "4x 20% of avg avgs", "lower nanmean stds", "lower max stds    "]
         bool_res = [is_n_bools(np.abs(np.diff(mins)), 4, lambda x: x >= 0.2*np.ptp(mins)) \
@@ -328,10 +359,10 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
 
         # temp boolean solution to proceed with model or not
-        if not np.nanmean(new_uncerts) <= np.nanmean(old_uncerts):
-            target.postcard = save_post
-            target.integrated_postcard = save_int_post
-            target.data_for_target(do_roll=True, ignore_bright=0)
+        # if not np.nanmean(new_uncerts) <= np.nanmean(old_uncerts):
+        #     target.postcard = save_post
+        #     target.integrated_postcard = save_int_post
+            # target.data_for_target(do_roll=True, ignore_bright=0)
 
         # plot rest of stuff
         temp_int_post = np.zeros_like(calculated_int_post)
