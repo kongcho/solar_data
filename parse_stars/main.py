@@ -95,7 +95,7 @@ def logical_or_all_args(*args):
         result += arg
     return np.where(result != 0, 1, 0)
 
-def make_background_mask_max(target, img, model_pix=15, max_factor=0.01):
+def make_background_mask_max(target, img, model_pix=15, max_factor=0.1):
     if not np.any(img):
         return -1
 
@@ -275,7 +275,7 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
                 plt.title("Data")
 
                 plt.subplot(1, n, 3)
-                plt.imshow(model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
+                plt.imshow(int_model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
                 plt.title("Whole Model")
 
                 plt.subplot(1, n, 4)
@@ -290,7 +290,10 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
                     pdf.savefig()
                     plt.close(fig2)
 
-            new_post[i, min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
+            new_region = region[min_i:max_i, min_j:max_j] - model
+            new_region -= np.average(new_region)
+
+            new_post[i, min_i:max_i, min_j:max_j] = new_region
 
         # save stuff
         save_post = np.zeros_like(target.postcard)
