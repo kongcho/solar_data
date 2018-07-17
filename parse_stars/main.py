@@ -39,8 +39,8 @@ logger = setup_main_logging()
 def build_dict(keys, values):
     dic = {}
     for i, key in enumerate(keys):
-        # if key == u'c1_1' or key == u'c0_2' or key == u'c2_0':
-        dic[key] = values[i]
+        if key != u'c0_0':
+            dic[key] = values[i]
     return dic
 
 def make_model_background(img, model_pix=15):
@@ -60,7 +60,6 @@ def make_fixed_background(img, fixed_dic, model_pix=15):
     ycoord = min(model_pix*2, img.shape[0])
     xcoord = min(model_pix*2, img.shape[1])
     y, x = np.mgrid[:ycoord, :xcoord]
-    # p_init = models.Polynomial2D(degree=1)
     p_init = models.Polynomial2D(degree=2, fixed=fixed_dic)
     fit_p = fitting.LevMarLSQFitter()
     p = fit_p(p_init, x, y, z=img)
@@ -178,6 +177,85 @@ def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
     plt.plot([x1, x2], [y2, y2], marker, **kwargs)
 
 def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, min_img=-1000, max_img=1000, save_pdf=True):
+    target = photometry.star(targ, ffi_dir=ffidata_folder)
+
+    try:
+        target.make_postcard()
+    except Exception as e:
+        logger.info("run_photometry unsuccessful: %s" % target.kic)
+        logger.error(e.message)
+        return 1
+
+    run_partial_photometry(target)
+
+    coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                         target.center[1]-model_pix, target.center[1]+model_pix], \
+                        [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                        [False, True, False, True])
+    min_i, max_i, min_j, max_j = coords
+
+    int_reg = target.integrated_postcard[min_i:max_i, min_j:max_j]
+    int_mask = make_background_mask_max(target, int_reg, max_factor=0.5)
+    int_masked_reg = np.ma.masked_array(int_reg, mask=int_mask)
+    int_model, dic = make_model_background(int_masked_reg)
+
+    # make mask to improve aperture
+    tar = target.target
+    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
+               tar.params['Channel_2'], tar.params['Channel_3']]
+
+    kepprf = lk.KeplerPRF(channel=channel[0], shape=(image_region*2, image_region*2), \
+                          column=image_region, row=image_region)
+    prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
+                 scale_row=1, scale_col=1, rotation_angle=0)
+    mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
+
+    with PdfPages(fout + targ + "_out.pdf") as pdf:
+        fig0 = plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close(fig0)
+
+        improve_aperture(target, mask, image_region, relax_pixels=2)
+        fig0 = plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close(fig0)
+
+        for i in range(target.postcard.shape[0]):
+            region = target.postcard[i]
+            z_old = region[min_i:max_i, min_j:max_j]
+
+            # mask = make_background_mask_max(target, z_old, max_factor=0.5)
+            # z = np.ma.masked_array(z_old, mask=mask)
+            # model = make_fixed_background(z, dic)
+
+            # print model
+
+            new_region = region[min_i:max_i, min_j:max_j]# - model
+            new_region -= np.median(new_region)
+
+            region[min_i:max_i, min_j:max_j] = new_region
+
+        # finalise new postcard
+        new_int = np.zeros_like(target.integrated_postcard)
+        new_int = np.sum(target.postcard, axis=0)
+        target.integrated_postcard = new_int # not part of final
+        target.data_for_target(do_roll=True, ignore_bright=0)
+
+        # plot rest of stuff
+        fig0 = plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close("all")
+
+        return 0
+
+
+def not_testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, min_img=-1000, max_img=1000, save_pdf=True):
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
@@ -262,9 +340,8 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
             data_ranges.append(np.ptp(z))
 
-            new_region = region[min_i:max_i, min_j:max_j] - model
-            new_region -= np.median(new_region)
-            print np.median(new_region)
+            new_region = region[min_i:max_i, min_j:max_j] # - model
+            new_region -= np.median(z)
 
             new_post[i, min_i:max_i, min_j:max_j] = new_region
 
@@ -488,7 +565,7 @@ def main():
 
     # SIMPLE TESTS
     for kic in kics:
-        testing(kic, save_pdf=False, fout="./")
+        not_testing(kic, save_pdf=True, fout="./")
 
     # GET RESULTS
     # all_res = []
