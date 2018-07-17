@@ -255,7 +255,7 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         return 0
 
 
-def not_testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, min_img=-1000, max_img=1000, save_pdf=True):
+def not_testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, max_factor=0.2, min_img=-1000, max_img=1000, save_pdf=True):
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
@@ -285,9 +285,9 @@ def not_testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.00
     min_i, max_i, min_j, max_j = coords
 
     int_reg = target.integrated_postcard[min_i:max_i, min_j:max_j]
-    int_mask = make_background_mask_max(target, int_reg, max_factor=0.5)
+    int_mask = make_background_mask_max(target, int_reg, model_pix=model_pix, max_factor=max_factor)
     int_masked_reg = np.ma.masked_array(int_reg, mask=int_mask)
-    int_model, dic = make_model_background(int_masked_reg)
+    int_model, dic = make_model_background(int_masked_reg, model_pix=model_pix)
 
     models = np.zeros((target.postcard.shape[0], max_i-min_i, max_j-min_j))
 
@@ -333,9 +333,9 @@ def not_testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.00
             region = target.postcard[i]
             z_old = region[min_i:max_i, min_j:max_j]
 
-            mask = make_background_mask_max(target, z_old, max_factor=0.5)
+            mask = make_background_mask_max(target, z_old, model_pix=model_pix, max_factor=max_factor)
             z = np.ma.masked_array(z_old, mask=mask)
-            model = make_fixed_background(z, dic)
+            model = make_fixed_background(z, dic, model_pix=model_pix)
             models[i] = model
 
             data_ranges.append(np.ptp(z))
@@ -565,7 +565,7 @@ def main():
 
     # SIMPLE TESTS
     for kic in kics:
-        not_testing(kic, save_pdf=True, fout="./")
+        not_testing(kic, save_pdf=True, fout="./", model_pix=10, max_factor=0.2)
 
     # GET RESULTS
     # all_res = []
