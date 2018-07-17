@@ -38,7 +38,7 @@ def set_filenames_based_on_folders(data_folder="./data/"):
 # removes warning messages from kplr that is propagated to f3
 
 def setup_logging():
-    format_str = '%(asctime)s [%(levelname)s]\t%(name)s - %(module)s: %(funcName)20s: %(message)s'
+    format_str = '%(asctime)s [%(levelname)s]\t%(name)s-%(module)-10s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
 
     # for stderr

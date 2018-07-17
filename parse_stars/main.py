@@ -60,6 +60,7 @@ def make_fixed_background(img, fixed_dic, model_pix=15):
     ycoord = min(model_pix*2, img.shape[0])
     xcoord = min(model_pix*2, img.shape[1])
     y, x = np.mgrid[:ycoord, :xcoord]
+    # p_init = models.Polynomial2D(degree=1)
     p_init = models.Polynomial2D(degree=2, fixed=fixed_dic)
     fit_p = fitting.LevMarLSQFitter()
     p = fit_p(p_init, x, y, z=img)
@@ -95,7 +96,7 @@ def logical_or_all_args(*args):
         result += arg
     return np.where(result != 0, 1, 0)
 
-def make_background_mask_max(target, img, model_pix=15, max_factor=0.1):
+def make_background_mask_max(target, img, model_pix=15, max_factor=0.01):
     if not np.any(img):
         return -1
 
@@ -169,6 +170,12 @@ def check_postcard_ranges(data, postcard, percentile=20):
     ]
     return all(booleans)
 
+def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
+    plt.plot([x1, x1], [y1, y2], marker, **kwargs)
+    plt.plot([x2, x2], [y1, y2], marker, **kwargs)
+    plt.plot([x1, x2], [y1, y1], marker, **kwargs)
+    plt.plot([x1, x2], [y2, y2], marker, **kwargs)
+
 def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, min_img=-1000, max_img=1000, save_pdf=True):
 
     target = photometry.star(targ, ffi_dir=ffidata_folder)
@@ -180,19 +187,17 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         logger.error(e.message)
         return 1
 
+    run_partial_photometry(target)
+
     # make temp vars
+    save_post = np.empty_like(target.postcard)
+    save_post[:] = target.postcard
 
-    old_post = np.empty_like(target.postcard)
-    old_post[:] = target.postcard
+    new_post = np.empty_like(target.postcard)
+    new_post[:] = target.postcard
 
-    old_int = np.empty_like(target.integrated_postcard)
-    old_int[:] = target.integrated_postcard
-
-    post = target.integrated_postcard
-    maximum = np.max(post[np.nonzero(post)])
-
-    ai, bi, aj, bj = target.center[0]-model_pix, target.center[0]+model_pix, \
-                     target.center[1]-model_pix, target.center[1]+model_pix
+    save_int = np.empty_like(target.integrated_postcard)
+    save_int[:] = target.integrated_postcard
 
     coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
                          target.center[1]-model_pix, target.center[1]+model_pix], \
@@ -200,15 +205,10 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
                         [False, True, False, True])
     min_i, max_i, min_j, max_j = coords
 
-    int_model, dic = make_model_background(target.integrated_postcard[min_i:max_i, min_j:max_j])
-
-    old_int[min_i,min_j:max_j] = maximum
-    old_int[max_i,min_j:max_j] = maximum
-    old_int[min_i:max_i,min_j] = maximum
-    old_int[min_i:max_i,max_j] = maximum
-
-    new_post = np.zeros_like(target.postcard)
-    new_post[:] = target.postcard[:]
+    int_reg = target.integrated_postcard[min_i:max_i, min_j:max_j]
+    int_mask = make_background_mask_max(target, int_reg, max_factor=0.01)
+    int_masked_reg = np.ma.masked_array(int_reg, mask=int_mask)
+    int_model, dic = make_model_background(int_masked_reg)
 
     models = np.zeros((target.postcard.shape[0], max_i-min_i, max_j-min_j))
 
@@ -216,8 +216,7 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
     fig1 = plt.figure(1, figsize=(12, 6))
     plt.subplot(1, 2, 1)
     plt.imshow(old_int, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
-
-    run_partial_photometry(target)
+    plot_box(min_j, max_j, min_i, max_i, 'r-', linewidth=1)
 
     # make mask to improve aperture
     tar = target.target
@@ -231,7 +230,6 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
 
     with PdfPages(fout + targ + "_out.pdf") as pdf:
-
         fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
@@ -256,60 +254,59 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
             region = target.postcard[i]
             z_old = region[min_i:max_i, min_j:max_j]
 
-            mask = make_background_mask_max(target, z_old)
+            mask = make_background_mask_max(target, z_old, max_factor=0.01)
             z = np.ma.masked_array(z_old, mask=mask)
             model = make_fixed_background(z, dic)
             models[i] = model
 
             data_ranges.append(np.ptp(z))
 
-            if i == 0:
-                n = 5
-                fig2 = plt.figure(2, figsize=(10, 4))
-                plt.subplot(1, n, 1)
-                plt.imshow(mask, cmap='gray', vmin=0, vmax=1, origin='lower')
-                plt.title("Mask")
-
-                plt.subplot(1, n, 2)
-                plt.imshow(z,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
-                plt.title("Data")
-
-                plt.subplot(1, n, 3)
-                plt.imshow(int_model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
-                plt.title("Whole Model")
-
-                plt.subplot(1, n, 4)
-                plt.imshow(model,  interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
-                plt.title("Single Model")
-
-                plt.subplot(1, n, 5)
-                plt.imshow(z - model, interpolation='nearest', cmap='gray', vmin=-200, vmax=1000, origin='lower')
-                plt.title("Residual")
-                plt.colorbar()
-                if save_pdf:
-                    pdf.savefig()
-                    plt.close(fig2)
-
             new_region = region[min_i:max_i, min_j:max_j] - model
             new_region -= np.average(new_region)
 
             new_post[i, min_i:max_i, min_j:max_j] = new_region
 
-        # save stuff
-        save_post = np.zeros_like(target.postcard)
-        save_post[:] = target.postcard
-        save_int_post = np.zeros_like(target.integrated_postcard)
-        save_int_post[:] = target.integrated_postcard
+            if i == 0:
+                n = 5
+                fig2 = plt.figure(2, figsize=(10, 4))
+
+                plt.subplot(1, n, 1)
+                plt.imshow(mask, cmap='gray', vmin=0, vmax=1, origin='lower')
+                plt.title("Mask")
+
+                plt.subplot(1, n, 2)
+                plt.imshow(z,  interpolation='nearest', cmap='gray', \
+                           vmin=-200, vmax=1000, origin='lower')
+                plt.title("Data")
+
+                plt.subplot(1, n, 3)
+                plt.imshow(int_model,  interpolation='nearest', cmap='gray', \
+                           vmin=-200, vmax=1000, origin='lower')
+                plt.title("Whole Model")
+
+                plt.subplot(1, n, 4)
+                plt.imshow(model,  interpolation='nearest', cmap='gray', \
+                           vmin=-200, vmax=1000, origin='lower')
+                plt.title("Single Model")
+
+                plt.subplot(1, n, 5)
+                plt.imshow(new_region, interpolation='nearest', cmap='gray', \
+                           vmin=-200, vmax=1000, origin='lower')
+                plt.title("Residual")
+                plt.colorbar()
+
+                if save_pdf:
+                    pdf.savefig()
+                    plt.close(fig2)
 
         # finalise new postcard
-        calculated_int_post = np.zeros_like(target.integrated_postcard)
-        calculated_int_post = np.sum(new_post, axis=0)
-        target.integrated_postcard = calculated_int_post # not part of final
+        new_int = np.zeros_like(target.integrated_postcard)
+        new_int = np.sum(new_post, axis=0)
+        target.integrated_postcard = new_int # not part of final
         target.postcard = new_post # not part of final
         target.data_for_target(do_roll=True, ignore_bright=0)
 
         # print information about model
-
         new_uncerts = np.zeros_like(target.flux_uncert)
         new_uncerts[:] = target.flux_uncert
 
@@ -324,21 +321,9 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
             maxs.append(np.max(curr_card))
             avgs.append(np.average(curr_card))
 
-        # print targ
-        # print np.ptp(ranges), np.std(ranges), np.var(ranges)
-        # print np.diff(ranges)
-        # print np.ptp(data_ranges), np.std(data_ranges), np.var(data_ranges)
-        # print np.diff(data_ranges)
-        # print np.ptp(mins), np.std(mins), np.var(mins)
-        # print np.diff(mins)
-        # print np.ptp(maxs), np.std(maxs), np.var(maxs)
-        # print np.diff(maxs)
-        # print np.ptp(avgs), np.std(avgs), np.var(avgs)
-        # print np.diff(avgs)
-        # print np.average(np.diff(ranges)), np.average(mins), np.average(maxs), np.average(avgs)
-        # print np.var(mins)/np.ptp(mins), np.var(maxs)/np.ptp(maxs), np.var(avgs)/np.ptp(avgs)
-
-        bool_names = ["4x 20% of ran mins", "4x 20% of ran maxs", "4x 20% of ran avgs", "4x 20% of avg mins", "4x 20% of avg maxs", "4x 20% of avg avgs", "lower nanmean stds", "lower max stds    "]
+        bool_names = ["4x 20% of ran mins", "4x 20% of ran maxs", "4x 20% of ran avgs", \
+                      "4x 20% of avg mins", "4x 20% of avg maxs", "4x 20% of avg avgs", \
+                      "lower nanmean stds", "lower max stds    "]
         bool_res = [is_n_bools(np.abs(np.diff(mins)), 4, lambda x: x >= 0.2*np.ptp(mins)) \
                     , is_n_bools(np.abs(np.diff(maxs)), 4, lambda x: x >= 0.2*np.ptp(maxs)) \
                     , is_n_bools(np.abs(np.diff(avgs)), 4, lambda x: x >= 0.2*np.ptp(avgs)) \
@@ -360,7 +345,6 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         #     print targ, "FASLSESES"
         #     integrated_post = target.integrated_postcard
 
-
         # temp boolean solution to proceed with model or not
         # if not np.nanmean(new_uncerts) <= np.nanmean(old_uncerts):
         #     target.postcard = save_post
@@ -368,17 +352,12 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
             # target.data_for_target(do_roll=True, ignore_bright=0)
 
         # plot rest of stuff
-        temp_int_post = np.zeros_like(calculated_int_post)
-        temp_int_post[:] = calculated_int_post
-        temp_int_post[min_i,min_j:max_j] = maximum
-        temp_int_post[max_i,min_j:max_j] = maximum
-        temp_int_post[min_i:max_i,min_j] = maximum
-        temp_int_post[min_i:max_i,max_j] = maximum
-
         plt.figure(1)
         plt.subplot(1, 2, 2)
-        plt.imshow(temp_int_post, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
+        plt.imshow(new_int, interpolation='nearest', cmap='gray', vmin=min_img, vmax=max_img, origin='lower')
+        plot_box(min_j, max_j, min_i, max_i, 'r-', linewidth=1)
         plt.colorbar()
+
         if save_pdf:
             pdf.savefig()
             plt.close(fig1)
