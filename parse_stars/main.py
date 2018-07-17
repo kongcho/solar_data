@@ -39,8 +39,8 @@ logger = setup_main_logging()
 def build_dict(keys, values):
     dic = {}
     for i, key in enumerate(keys):
-        if key == u'c1_1' or key == u'c0_2' or key == u'c2_0':
-            dic[key] = values[i]
+        # if key == u'c1_1' or key == u'c0_2' or key == u'c2_0':
+        dic[key] = values[i]
     return dic
 
 def make_model_background(img, model_pix=15):
@@ -60,14 +60,17 @@ def make_fixed_background(img, fixed_dic, model_pix=15):
     ycoord = min(model_pix*2, img.shape[0])
     xcoord = min(model_pix*2, img.shape[1])
     y, x = np.mgrid[:ycoord, :xcoord]
-    p_init = models.Polynomial2D(degree=2) #, fixed=fixed_dic)
+    # p_init = models.Polynomial2D(degree=1)
+    p_init = models.Polynomial2D(degree=2, fixed=fixed_dic)
     fit_p = fitting.LevMarLSQFitter()
     p = fit_p(p_init, x, y, z=img)
 
     model = p(x, y)
     return model
 
-def model_background(target, model_pix=15, bright_factor=0.5):
+# TODO: NEED TO UPDATE LMAOOOO
+# TODO: WHERE THE MASK AT
+def model_background(target, model_pix):
     for i in range(target.postcard.shape[0]):
         region = target.postcard[i]
         coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
@@ -76,19 +79,11 @@ def model_background(target, model_pix=15, bright_factor=0.5):
                             [False, True, False, True])
         min_i, max_i, min_j, max_j = coords
         img = region[min_i:max_i, min_j:max_j]
-
-        mask = make_background_mask_max(target, img, model_pix, bright_factor)
-        img_masked = np.ma.masked_array(img, mask=mask)
-
-        model, dic = make_model_background(img_masked)
-
-        new_img = region[min_i:max_i, min_j:max_j] - model
-        new_img -= np.median(new_img)
-
-        region[min_i:max_i, min_j:max_j] = new_img
+        model, dic = make_model_background(img)
+        region[min_i:max_i, min_j:max_j] = region[min_i:max_i, min_j:max_j] - model
 
     target.integrated_postcard = np.sum(target.postcard, axis=0)
-    target.data_for_target(do_roll=True, ignore_bright=0)
+    run_partial_photometry(target)
     return target
 
 def get_median_region(arr):
@@ -101,7 +96,7 @@ def logical_or_all_args(*args):
         result += arg
     return np.where(result != 0, 1, 0)
 
-def make_background_mask_max(target, img, model_pix=15, max_factor=0.5):
+def make_background_mask_max(target, img, model_pix=15, max_factor=0.01):
     if not np.any(img):
         return -1
 
@@ -111,9 +106,11 @@ def make_background_mask_max(target, img, model_pix=15, max_factor=0.5):
                         [False, True, False, True])
     min_i, max_i, min_j, max_j = coords
 
+    # max_mask = np.where(img >= max_factor*np.max(img), 1, 0)
     max_mask = np.where(img >= np.percentile(img, int((1-max_factor)*100)), 1, 0)
     targets_mask = np.where(target.targets != 0, 1, 0)[min_i:max_i, min_j:max_j]
     mask = logical_or_all_args(max_mask, targets_mask)
+
     return mask
 
 def build_mask_layer(img, coord, pix):
@@ -142,8 +139,37 @@ def make_background_mask_filter(target, img, mask_pixels=2):
 
     mask_peaks = np.where(mask_peaks > 0, 1, 0)
     mask = mask_peaks
+    # mask = np.where(image_max >= 0.1*np.average(image_max), 1, 0)
 
     return mask
+
+def arr_within_bound_n_times(arr, n, bound):
+    return is_n_bools(arr, n, lambda x: x <= bound)
+
+def check_postcard_ranges(data, postcard, percentile=20):
+    """
+    want to return true/should change if:
+    - the model varies, ie minimum/maximum/avg varies
+      - aka the range of mins is higher than boundary
+      - boundary as some factor * average mins?
+    false/don't change if:
+    - model range for each postcard is too low
+      - aka the difference in one image is low in comparison to data?
+      - data = average masked background? range of background?
+    """
+    ranges = []
+    mins = []
+    maxs = []
+    for i in range(postcard.shape[0]):
+        curr_card = postcard[i]
+        ranges.append(np.ptp(curr_card))
+        mins.append(np.min(curr_card))
+        maxs.append(np.max(curr_card))
+    booleans = [is_n_bools(ranges, 52, lambda x: x == 0)
+                # , arr_within_range_n_times(mins, 1, np.percentile(mins, percentile))
+                # , arr_within_range_n_times(maxs, 1, np.percentile(maxs, percentile))
+    ]
+    return all(booleans)
 
 def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
     plt.plot([x1, x1], [y1, y2], marker, **kwargs)
@@ -152,6 +178,7 @@ def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
     plt.plot([x1, x2], [y2, y2], marker, **kwargs)
 
 def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, min_img=-1000, max_img=1000, save_pdf=True):
+
     target = photometry.star(targ, ffi_dir=ffidata_folder)
 
     try:
@@ -223,6 +250,7 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
         data_ranges = []
 
         for i in range(target.postcard.shape[0]):
+
             # make model
             region = target.postcard[i]
             z_old = region[min_i:max_i, min_j:max_j]
@@ -236,6 +264,7 @@ def testing(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, m
 
             new_region = region[min_i:max_i, min_j:max_j] - model
             new_region -= np.median(new_region)
+            print np.median(new_region)
 
             new_post[i, min_i:max_i, min_j:max_j] = new_region
 
@@ -459,7 +488,7 @@ def main():
 
     # SIMPLE TESTS
     for kic in kics:
-        testing(kic, save_pdf=True, fout="./")
+        testing(kic, save_pdf=False, fout="./")
 
     # GET RESULTS
     # all_res = []
