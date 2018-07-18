@@ -230,8 +230,10 @@ def build_arr_n_names(name, n):
     return arr
 
 def print_lc_improved_aperture(kics, fout, image_region=15):
-    names = ["KIC"] + build_arr_n_names("flux", 52) + build_arr_n_names("uncert", 4) + \
-             build_arr_n_names("img", 900)
+    names = ["KIC"] + build_arr_n_names("img", 900) + \
+            build_arr_n_names("flux_old", 52) + build_arr_n_names("uncert_old", 4) + \
+            build_arr_n_names("flux_new", 52) + build_arr_n_names("uncert_new", 4)
+
     is_first = True
     with open(fout, "w") as f:
         writer = csv.writer(f, delimiter=',', lineterminator='\n')
@@ -240,14 +242,17 @@ def print_lc_improved_aperture(kics, fout, image_region=15):
             if target == 1:
                 continue
             if is_first:
-                names = ["KIC"] + map(str, target.times) + build_arr_n_names("uncert", 4) + \
-                        build_arr_n_names("img", 900)
+                names = ["KIC"] + build_arr_n_names("img", 900) + \
+                        map(str, target.times) + build_arr_n_names("uncert_old", 4) + \
+                        map(str, target.times) + build_arr_n_names("uncert_new", 4)
                 writer.writerow(names)
                 is_first = False
             calculate_better_aperture(target, 0.001, 2, 0.7, image_region=image_region)
+            arr = np.concatenate([np.asarray([kic]), target.img.flatten(), \
+                                  target.obs_flux, target.flux_uncert])
             model_background(target, 0.2, 15)
-            arr = np.concatenate([np.asarray([kic]), target.obs_flux, target.flux_uncert, \
-                                  target.img.flatten()])
+            arr = np.append(arr, target.obs_flux)
+            arr = np.append(arr, target.flux_uncert)
             writer.writerow(arr)
             logger.info("done: %s" % kic)
     logger.info("done")

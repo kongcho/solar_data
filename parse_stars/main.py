@@ -77,7 +77,7 @@ def main():
     np.set_printoptions(linewidth=1000) #, precision=1)
 
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
-    kics = ["11913365", "11913377"] + ben_kics
+    kics = ["11913365"] #, "11913377"] + ben_kics
 
     # SIMPLE TESTS
     for kic in kics:
