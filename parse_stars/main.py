@@ -565,7 +565,7 @@ def main():
 
     # SIMPLE TESTS
     for kic in kics:
-        not_testing(kic, save_pdf=True, fout="./", model_pix=10, max_factor=0.2)
+        not_testing(kic, save_pdf=True, fout="./", model_pix=8, max_factor=0.2)
 
     # GET RESULTS
     # all_res = []
