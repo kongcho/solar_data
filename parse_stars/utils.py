@@ -1,4 +1,5 @@
 import csv
+import funcsigs
 from settings import setup_logging
 
 logger = setup_logging()
@@ -170,3 +171,28 @@ def is_n_bools(arr, n, bool_func):
             n_bools = True
             break
     return n_bools
+
+# formats array to print by separation
+def format_arr(arr, sep="\t"):
+    return sep.join(str(i) for i in arr)
+
+# returns tuple of keys from a dictionary
+def get_keys(dic):
+    keys = ()
+    for key in dic:
+        keys += (key,)
+    return keys
+
+# helper, gets a subset of main_dic from subset of keys between both dictionaries
+def get_union_dic(main_dic, secondary_dic):
+    keys_main = get_keys(main_dic)
+    keys_alt = get_keys(secondary_dic)
+    sub_keys = set(keys_main).intersection(keys_alt)
+    new_dic = {k: main_dic.get(k, None) for k in sub_keys}
+    return new_dic
+
+# gets the right kwargs for a function from a larger set of kwargs
+def get_sub_kwargs(func, **kwargs):
+    sig = funcsigs.signature(func)
+    func_kwargs = get_union_dic(kwargs, sig.parameters)
+    return func_kwargs

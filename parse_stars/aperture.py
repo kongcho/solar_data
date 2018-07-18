@@ -1,5 +1,7 @@
 import os
 import numpy as np
+import lightkurve as lk
+
 from settings import f3_location
 
 from utils import clip_array, is_n_bools
@@ -204,6 +206,27 @@ def fake_bool(target):
     logger.info("done")
     return True
 
+# outputs dict of functions that finds faulty stars
+#   and kics that fall in those functions
+def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntargets=100):
+    full_dict = {}
+    full_dict["good"] = []
+    for boolean_func in boolean_funcs:
+        full_dict[boolean_func.__name__] = []
+    for targ in targets:
+        is_faulty = False
+        target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
+        if target == 1:
+            return 1
+        for boolean in boolean_funcs:
+            if boolean(target):
+                full_dict[boolean.__name__].append(target)
+                is_faulty = True
+        if not is_faulty:
+            full_dict["good"].append(target)
+    logger.info("done")
+    return full_dict
+
 # helper function for improve_aperture, pads any image to desired shape with pad_val
 def pad_img(img, desired_shape, positions, pad_val=0):
     if len(desired_shape) != len(positions):
@@ -226,7 +249,9 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
         offset_y += desired_shape[0]-img.shape[0]
     if "Left" in sides:
         offset_x += desired_shape[1]-img.shape[1]
-    return pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
+    img = pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
+    logger.info("done")
+    return img
 
 # helper function for remove_second_star, determines how second star is detected
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
@@ -267,6 +292,7 @@ def img_to_new_aperture(target, img, image_region=15):
                                           [target.targets.shape[0]-1, target.targets.shape[1]-1], \
                                           [True, True])
                 target.targets[big_i, big_j] = 0
+    logger.info("done")
     return img
 
 # helper function for isolate_star_cycle
@@ -284,7 +310,7 @@ def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
 
 # helper function for improve_aperture, removes other potential stars
 # relax_pixels is how relaxed the function is
-def isolate_star_cycle(img, ii, jj, image_region=15, relax_pixels=2):
+def isolate_star_cycle(img, ii, jj, relax_pixels=2, image_region=15):
     len_x = img.shape[1]
     len_y = img.shape[0]
     c_j = len_x//2
@@ -315,7 +341,7 @@ def isolate_star_cycle(img, ii, jj, image_region=15, relax_pixels=2):
     return img
 
 # main function to improve aperture and remove other stars from initial apertures
-def improve_aperture(target, mask=None, image_region=15, relax_pixels=2, second_factor=0.7):
+def improve_aperture(target, mask=None, relax_pixels=2, second_factor=0.7, image_region=15):
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
 
@@ -333,9 +359,9 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2, second_
         img_cycle = np.empty_like(img_save)
         img_cycle[:] = img_save
         if has_close_peaks(target, None, 1.2):
-            img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, 1)
+            img_cycle = isolate_star_cycle(img_cycle, ii, jj, 1, image_region)
         else:
-            img_cycle = isolate_star_cycle(img_cycle, ii, jj, image_region, relax_pixels)
+            img_cycle = isolate_star_cycle(img_cycle, ii, jj, relax_pixels, image_region)
         run_cycle = np.any(np.subtract(img_save, img_cycle))
         img_save = img_cycle
 
@@ -347,8 +373,8 @@ def improve_aperture(target, mask=None, image_region=15, relax_pixels=2, second_
     logger.info("done")
     return target.img
 
-# creates mask to overlay aperture with from rough psf from lightkurve package
-def calculate_better_aperture(target, mask_factor=0.001, image_region=15):
+# helper that creates mask to overlay aperture with from rough psf from lightkurve package
+def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
                tar.params['Channel_2'], tar.params['Channel_3']]
@@ -359,24 +385,51 @@ def calculate_better_aperture(target, mask_factor=0.001, image_region=15):
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
     return mask
 
-# outputs dict of functions that finds faulty stars
-#   and kics that fall in those functions
-def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntargets=100):
-    full_dict = {}
-    full_dict["good"] = []
-    for boolean_func in boolean_funcs:
-        full_dict[boolean_func.__name__] = []
-    for targ in targets:
-        is_faulty = False
-        target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
-        if target == 1:
-            return 1
-        for boolean in boolean_funcs:
-            if boolean(target):
-                full_dict[boolean.__name__].append(target)
-                is_faulty = True
-        if not is_faulty:
-            full_dict["good"].append(target)
+# finalises improved aperture with functions)
+def calculate_better_aperture(target, mask_factor=0.001, relax_pixels=2, \
+                              second_factor=0.7, image_region=15):
+    mask = calculate_aperture_mask(target, mask_factor, image_region)
+    improve_aperture(target, mask, relax_pixels, second_factor, image_region)
     logger.info("done")
-    return full_dict
+    return 0
+
+# helper, completes logical arr on given arrays, all arrays should be same size
+def logical_or_all_args(*args):
+    result = np.zeros_like(args[0])
+    for arg in args:
+        result += arg
+    return np.where(result != 0, 1, 0)
+
+# helper that creates mask for the other stars in the background
+def make_background_mask(target, img, coords, max_factor=0.2, model_pix=15):
+    if not np.any(img):
+        return -1
+
+    min_i, max_i, min_j, max_j = coords
+    max_mask = np.where(img >= np.percentile(img, int((1-max_factor)*100)), 1, 0)
+    targets_mask = np.where(target.targets != 0, 1, 0)[min_i:max_i, min_j:max_j]
+    mask = logical_or_all_args(max_mask, targets_mask)
+    return mask
+
+# models the background variation and removes it to calculate the light curves
+def model_background(target, max_factor=0.2, model_pix=15):
+    coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                         target.center[1]-model_pix, target.center[1]+model_pix], \
+                        [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                        [False, True, False, True])
+    min_i, max_i, min_j, max_j = coords
+
+    for i in range(target.postcard.shape[0]):
+        min_i, max_i, min_j, max_j = coords
+        region = target.postcard[i]
+        img = region[min_i:max_i, min_j:max_j]
+
+        mask = make_background_mask(target, img, coords, max_factor, model_pix)
+        z = np.ma.masked_array(img, mask=mask)
+        img -= np.ma.median(z)
+
+    target.integrated_postcard = np.sum(target.postcard, axis=0)
+    target.data_for_target(do_roll=True, ignore_bright=0)
+    logger.info("done")
+    return target
 

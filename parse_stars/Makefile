@@ -8,6 +8,13 @@ run:
 model:
 	venv/bin/python ./model.py
 
+quick:
+	rm -f *.pyc
+	rm -f *.log
+	rm -f screenlog.0
+	rm -f *.tar.gz
+	rm -f *.zip
+
 clean:
 	rm -rf venv
 	rm -f *.pyc

@@ -12,7 +12,8 @@ from matplotlib import pyplot as plt
 from matplotlib import gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
 
-from aperture import improve_aperture, calculate_better_aperture
+from utils import get_sub_kwargs
+from aperture import run_photometry, improve_aperture, calculate_better_aperture
 from settings import setup_logging
 
 logger = setup_logging()
@@ -47,14 +48,15 @@ def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
                    min_val=5000, ntargets=100):
     target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
     if target == 1:
-        return 1
+        return target
+
     for boolean in boolean_funcs:
         if pick_bad and not boolean(target):
             return 1
         elif boolean(target):
             return 1
     plot_data(target, count)
-    logger.info("tests_booleans done")
+    logger.info("done")
     return target
 
 # plots list of targets to a filename if the boolean function is true
@@ -82,34 +84,138 @@ def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     logger.info("done")
     return parsed_targets
 
-# TODO: function
-def print_better_aperture(targ, mask_factor=0.001, image_region=15, fout="./"):
+# plots light curves after each given function
+# kwargs is any optional argument for any function
+def plot_functions(targ, fout="./", save_fig=True, *funcs, **kwargs):
     target = run_photometry(targ)
     if target == 1:
-        return
-
-    tar = target.target
-    channel = [tar.params['Channel_0'], tar.params['Channel_1'],
-               tar.params['Channel_2'], tar.params['Channel_3']]
-
-    kepprf = lk.KeplerPRF(channel=channel[0], shape=(image_region*2, image_region*2), \
-                          column=image_region, row=image_region)
-    prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
-                 scale_row=1, scale_col=1, rotation_angle=0)
-    mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
+        return target
 
     with PdfPages(fout + targ + "_out.pdf") as pdf:
-        plot_data(target)
+        for i in range(len(funcs) + 1):
+            if i != 0:
+                func = funcs[i-1]
+                curr_kwargs = get_sub_kwargs(func, **kwargs)
+                func(target, **curr_kwargs)
+            fig = plot_data(target)
+            if save_fig:
+                plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                               ha='center', fontsize = 11)
+                pdf.savefig()
+                plt.close(fig)
+
+    if not save_fig:
+        plt.show()
+    plt.close("all")
+
+    logger.info("done")
+    return target
+
+def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
+    plt.plot([x1, x1], [y1, y2], marker, **kwargs)
+    plt.plot([x2, x2], [y1, y2], marker, **kwargs)
+    plt.plot([x1, x2], [y1, y1], marker, **kwargs)
+    plt.plot([x1, x2], [y2, y2], marker, **kwargs)
+
+def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, \
+                              max_factor=0.2, min_img=-1000, max_img=1000, save_pdf=True):
+    target = run_photometry(target)
+    if target == 1:
+        return target
+
+    # make temp variables
+    save_post = np.empty_like(target.postcard)
+    save_post[:] = target.postcard
+
+    save_int = np.empty_like(target.integrated_postcard)
+    save_int[:] = target.integrated_postcard
+
+    coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
+                         target.center[1]-model_pix, target.center[1]+model_pix], \
+                        [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
+                        [False, True, False, True])
+    min_i, max_i, min_j, max_j = coords
+
+    # plot
+    fig1 = plt.figure(1, figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.imshow(save_int, interpolation='nearest', cmap='gray', \
+               vmin=min_img, vmax=max_img, origin='lower')
+    plot_box(min_j, max_j, min_i, max_i, 'r-', linewidth=1)
+
+    with PdfPages(fout + targ + "_out.pdf") as pdf:
+        # original plot
+        fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        plt.close()
-        improve_aperture(target, mask, image_region, relax_pixels=2)
-        plot_data(target)
+        plt.close(fig0)
+
+        # improved aperture plot
+        calculate_better_aperture(target, mask_factor=mask_factor, image_region=image_region)
+        fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
                        ha='center', fontsize = 11)
         pdf.savefig()
-        plt.close()
+        plt.close(fig0)
+
+        # background modelling
+        for i in range(target.postcard.shape[0]):
+            # make model
+            region = target.postcard[i]
+            img = region[min_i:max_i, min_j:max_j]
+
+            mask = make_background_mask(target, img, coords, max_factor, model_pix)
+            z = np.ma.masked_array(img, mask=mask)
+            img -= np.ma.median(z)
+
+            if i == 0:
+                n = 3
+                fig2 = plt.figure(2, figsize=(10, 4))
+
+                plt.subplot(1, n, 1)
+                plt.imshow(mask, cmap='gray', vmin=0, vmax=1, origin='lower')
+                plt.title("Mask")
+
+                plt.subplot(1, n, 2)
+                plt.imshow(z, interpolation='nearest', cmap='gray', \
+                           vmin=-200, vmax=1000, origin='lower')
+                plt.title("Data")
+
+                plt.subplot(1, n, 3)
+                plt.imshow(img, interpolation='nearest', cmap='gray', \
+                           vmin=-200, vmax=1000, origin='lower')
+                plt.title("Residual")
+                plt.colorbar()
+
+                if save_pdf:
+                    pdf.savefig()
+                    plt.close(fig2)
+
+        # finalise new postcard
+        target.integrated_postcard = np.sum(target.postcard, axis=0)
+        target.data_for_target(do_roll=True, ignore_bright=0)
+
+        # plot rest of stuff
+        plt.figure(1)
+        plt.subplot(1, 2, 2)
+        plt.imshow(target.integrated_postcard, interpolation='nearest', cmap='gray', \
+                   vmin=min_img, vmax=max_img, origin='lower')
+        plot_box(min_j, max_j, min_i, max_i, 'r-', linewidth=1)
+        plt.colorbar()
+
+        if save_pdf:
+            pdf.savefig()
+            plt.close(fig1)
+        else:
+            plt.show()
+        plt.close("all")
+
+        fig0 = plot_data(target)
+        plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
+                       ha='center', fontsize = 11)
+        pdf.savefig()
+        plt.close("all")
 
     logger.info("done")
     return target
@@ -161,22 +267,6 @@ def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000, \
             plt.close()
     logger.info("done")
     return
-
-def print_lc_improved_aperture(kics, fout, image_region=15):
-    with open(fout, "w") as f:
-        writer = csv.writer(f, delimiter=',', lineterminator='\n')
-        for kic in kics:
-            target = run_photometry(kic)
-            if target == 1:
-                return
-            mask = calculate_better_aperture(target, image_region=image_region)
-            improve_aperture(target, mask=mask, image_region=image_region)
-            #target.times
-            arr = np.concatenate([np.asarray([kic]), target.obs_flux, target.flux_uncert, \
-                                  target.img.flatten()])
-            writer.writerow(arr)
-    logger.info("done")
-    return 0
 
 # TODO: function
 def print_best_apertures(targ, edge_lim=0.015, min_val=5000, extend_region_size=3, \
