@@ -1,9 +1,3 @@
-"""
-TODO:
-- move photometry stuff somewhere
-- please clean up :'( don't import *
-"""
-
 import os
 import csv
 import itertools
@@ -19,6 +13,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from astropy.modeling import models, fitting
 
+from model import *
 from utils import *
 from settings import *
 from aperture import *
@@ -28,9 +23,9 @@ from plot import *
 
 logger = setup_main_logging()
 
-
 def testing(targ):
-    build_arr_n_names("hey", 3, 3)
+    target = run_photometry(targ)
+    return target.times, target.obs_flux
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -79,15 +74,14 @@ def main():
                 ]
 
     ## TESTS
-    np.set_printoptions(linewidth=1000, precision=1)
+    np.set_printoptions(linewidth=1000) #, precision=1)
 
     # kics = (get_nth_kics(filename_stellar_params, 4000, 1, ' ', 0))[:]
     kics = ["11913365", "11913377"] + ben_kics
 
     # SIMPLE TESTS
-    print_lc_improved_aperture(kics, "out.csv")
-    # for kic in kics:
-    #     testing(kic)
+    for kic in kics:
+        print testing(kic)
 
     make_sound(0.3, 440)
     logger.info("### everything done ###")
