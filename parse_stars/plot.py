@@ -2,6 +2,7 @@
 
 import logging
 import os
+import csv
 import numpy as np
 
 import matplotlib
@@ -12,8 +13,9 @@ from matplotlib import pyplot as plt
 from matplotlib import gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
 
-from utils import get_sub_kwargs
-from aperture import run_photometry, improve_aperture, calculate_better_aperture
+from utils import get_sub_kwargs, clip_array
+from aperture import run_photometry, improve_aperture, \
+    calculate_better_aperture, model_background, make_background_mask
 from settings import setup_logging
 
 logger = setup_logging()
@@ -119,7 +121,7 @@ def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
 
 def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, \
                               max_factor=0.2, min_img=-1000, max_img=1000, save_pdf=True):
-    target = run_photometry(target)
+    target = run_photometry(targ)
     if target == 1:
         return target
 
@@ -220,113 +222,34 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
     logger.info("done")
     return target
 
-def is_std_better_biggest(old_stds, stds):
-    max_i = np.argmax(stds)
-    return stds[max_i] <= old_stds[max_i]
+def build_arr_n_names(name, n):
+    arr = []
+    max_digits = len(str(n))
+    for i in range(n):
+        arr.append(("%s_%0" + str(max_digits) + "d") % (name, i))
+    return arr
 
-def is_std_better_avg(old_stds, stds):
-    return np.nanmean(stds) <= np.nanmean(old_stds)
-
-# runs through lists of different parameters, print flux plots and apertures,
-#   then tests if it has only 1 peak, then takes out lowest stddev
-def print_better_apertures(targ, boolean_func, edge_lim=0.015, min_val=5000, \
-                           extend_region_size=3, remove_excess=4):
-
-    target = photometry.star(targ)
-    target.make_postcard()
-
-    edge_lims = np.arange(edge_lim - 0.010, edge_lim + 0.025, 0.005)
-    min_vals = np.arange(min_val - 2000, min_val + 2000, 500)
-    region_sizes = np.arange(2, 5)
-    excesses = np.arange(2, 6)
-
-    test_vars = [edge_lims, min_vals, region_sizes, excesses]
-    vals = [list(itertools.product(*test_vars))]
-
-    run_partial_photometry(target, edge_lim=0.015, min_val=5000, extend_region_size=3, \
-                           remove_excess=4, ntargets=100)
-
-    old_stds = target.flux_uncert
-    plot_data(target)
-
-    with PdfPages(output_file) as pdf:
-        for count, val in enumerate(vals, 1):
-            res = {}
-            run_partial_photometry(target, edge_lim=val[0], min_val=val[1], \
-                                   extend_region_size=val[2], remove_excess=val[3], ntargets=100)
-            res["settings"] = "edge: " + str(val[0]) + " min: " + str(val[1]) + \
-                              " region: " + str(val[2]) + " excess: " + str(val[3])
-            res["boolean"] = boolean_func(target)
-            res["is_avg"] = is_std_better_avg(old_stds, target.flux_uncert)
-            res["is_most"] = is_std_better_biggest(old_stds, target.flux_uncert)
-            res["has_peaks"] = has_close_peaks(target)
-            results[val] = res
-            plot_data(target, count)
-            plt.gcf().text(4/8.5, 1/11., str(res), ha='center', fontsize = 11)
-            pdf.savefig()
-            plt.close()
-    logger.info("done")
-    return
-
-# TODO: function
-def print_best_apertures(targ, edge_lim=0.015, min_val=5000, extend_region_size=3, \
-                         remove_excess=4, min_factor=0.7):
-    fout = targ + "_plot.pdf"
-    target = photometry.star(targ, ffi_dir=ffidata_folder)
-    target.make_postcard()
-
-    best_pars = (edge_lim, min_val, extend_region_size, remove_excess)
-    edge_lims = np.arange(edge_lim - 0.010, edge_lim + 0.025, 0.01)
-    min_vals = np.arange(min_val - 2000, min_val + 2000, 1000)
-    region_sizes = np.arange(1, 3)
-    excesses = np.arange(1, 4)
-
-    single_results = []
-    all_vals = []
-
-    for v0, v1, v2, v3 in itertools.product(edge_lims, min_vals, region_sizes, excesses):
-        all_vals.append((v0, v1, v2, v3))
-
-    with PdfPages(targ + "_plot_1.pdf") as pdf, PdfPages(targ + "_plot_2.pdf") as pdf2:
-        if run_partial_photometry(target, edge_lim=0.015, min_val=5000, \
-                              extend_region_size=3, remove_excess=4, ntargets=100) == 1:
-            return 1
-
-        best_unc = target.flux_uncert
-        plot_data(target)
-        plt.gcf().text(4/8.5, 1/11., str(best_pars), ha='center', fontsize = 11)
-        pdf.savefig()
-        pdf2.savefig()
-        plt.close()
-
-        for count, vals in enumerate(all_vals, 1):
-            res = {}
-            if run_partial_photometry(target, edge_lim=vals[0], min_val=vals[1], \
-                                      extend_region_size=vals[2], remove_excess=vals[3], \
-                                      ntargets=100) == 1:
+def print_lc_improved_aperture(kics, fout, image_region=15):
+    names = ["KIC"] + build_arr_n_names("flux", 52) + build_arr_n_names("uncert", 4) + \
+             build_arr_n_names("img", 900)
+    is_first = True
+    with open(fout, "w") as f:
+        writer = csv.writer(f, delimiter=',', lineterminator='\n')
+        for kic in kics:
+            target = run_photometry(kic)
+            if target == 1:
                 continue
-            res["settings"] = vals
-            res["has_peaks"] = has_peaks(target, min_factor)
-            res["is_avg"] = is_std_better_avg(best_unc, target.flux_uncert)
-            res["is_most"] = is_std_better_biggest(best_unc, target.flux_uncert)
-            plot_data(target)
-            plt.gcf().text(4/8.5, 1/11., str(res), ha='center', fontsize = 11)
-            pdf2.savefig()
-            plt.close()
-            if not res["has_peaks"]:
-                single_results.append((np.nanmean(target.flux_uncert), vals))
-
-        if len(single_results) != 0:
-            best_unc, best_pars = single_results[single_results.index(min(single_results))]
-
-        if run_partial_photometry(target, edge_lim=best_pars[0], min_val=best_pars[1], \
-                                  extend_region_size=best_pars[2], remove_excess=best_pars[3], \
-                                  ntargets=100) == 1:
-            return 1
-        plot_data(target)
-        plt.gcf().text(4/8.5, 1/11., str((best_pars, best_unc)), ha='center', fontsize = 11)
-        pdf.savefig()
-        pdf2.savefig()
-        plt.close()
+            if is_first:
+                names = ["KIC"] + map(str, target.times) + build_arr_n_names("uncert", 4) + \
+                        build_arr_n_names("img", 900)
+                writer.writerow(names)
+                is_first = False
+            calculate_better_aperture(target, 0.001, 2, 0.7, image_region=image_region)
+            model_background(target, 0.2, 15)
+            arr = np.concatenate([np.asarray([kic]), target.obs_flux, target.flux_uncert, \
+                                  target.img.flatten()])
+            writer.writerow(arr)
+            logger.info("done: %s" % kic)
     logger.info("done")
     return 0
+

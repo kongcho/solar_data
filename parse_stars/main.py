@@ -28,23 +28,9 @@ from plot import *
 
 logger = setup_main_logging()
 
-def print_lc_improved_aperture(kics, fout, image_region=15):
-    with open(fout, "w") as f:
-        writer = csv.writer(f, delimiter=',', lineterminator='\n')
-        for kic in kics:
-            target = run_photometry(kic)
-            if target == 1:
-                return
-            calculate_better_aperture(target, image_region=image_region)
-            #target.times
-            arr = np.concatenate([np.asarray([kic]), target.obs_flux, target.flux_uncert, \
-                                  target.img.flatten()])
-            writer.writerow(arr)
-    logger.info("done")
-    return 0
 
 def testing(targ):
-    plot_functions(targ, "./", True, calculate_better_aperture, model_background)
+    build_arr_n_names("hey", 3, 3)
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -99,8 +85,9 @@ def main():
     kics = ["11913365", "11913377"] + ben_kics
 
     # SIMPLE TESTS
-    for kic in kics:
-        testing(kic)
+    print_lc_improved_aperture(kics, "out.csv")
+    # for kic in kics:
+    #     testing(kic)
 
     make_sound(0.3, 440)
     logger.info("### everything done ###")
