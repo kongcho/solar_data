@@ -1,16 +1,14 @@
+from utils import clip_array, is_n_bools
+from settings import setup_logging, ffidata_folder, f3_location
+logger = setup_logging()
+
 import os
 import numpy as np
 import lightkurve as lk
 
-from settings import f3_location
-
-from utils import clip_array, is_n_bools
-from settings import setup_logging, ffidata_folder
-
 os.sys.path.append(f3_location)
 from f3 import photometry
 
-logger = setup_logging()
 
 # helper function for different functions
 # runs find_other_sources under different parameters to change the aperture
@@ -46,7 +44,8 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
     logger.info("done: %s" % target.kic)
     return target
 
-# sets up photometry for a star and adds aperture to class
+
+# function, sets up photometry for a star and adds aperture to class
 def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
                    extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
 
@@ -60,6 +59,7 @@ def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets
 
     return run_partial_photometry(target, image_region, edge_lim, min_val, ntargets, \
                                   extend_region_size, remove_excess, plot_window, plot_flag)
+
 
 # helper function that determines 3-point pattern, but all quarters from the
 #   same channel must have the same pattern
@@ -90,6 +90,7 @@ def is_more_or_less_all(target, quarters):
             return 0
     return is_strange
 
+
 # helper function for is_more_or_less
 # returns if all but one element is nonzero in an array
 def most_are_same(arr):
@@ -98,6 +99,7 @@ def most_are_same(arr):
         if count >= len(arr) - 1 and nos[i] != 0:
             return True, nos[i]
     return False, 0
+
 
 # helper function that determines 3-point pattern
 # all but one pattern from same channel must be the same
@@ -125,6 +127,7 @@ def is_more_or_less(target, quarters):
         return is_nontrivial[1]
     return 0
 
+
 # boolean function: determines if 3-point pattern exists
 # aperture is too large (many stars in aperture) or too small (psf going out)
 def is_large_ap(target):
@@ -142,6 +145,7 @@ def is_large_ap(target):
     logger.info("False")
     return False
 
+
 # helper function for has_close_peaks: is peak if greater than all neighbours
 #   and is brighter than center peak by factor, assumes center peak = target
 def is_peak(max_of, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
@@ -152,6 +156,7 @@ def is_peak(max_of, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
                 , xi0j0 >= min_bright
                ]
     return all(booleans)
+
 
 # boolean function: determines if there's a peak within a given distance
 #   around center point (target star)
@@ -188,6 +193,7 @@ def has_close_peaks(target, diff=7, min_factor=1, avoid_pixels=0):
         logger.info("False")
     return any(peaks)
 
+
 # boolean function: poor estimate for faint stars based on aperture
 def is_faint_rough(target, limit=5500000):
     c_i = (img.shape[0])//2
@@ -201,12 +207,14 @@ def is_faint_rough(target, limit=5500000):
     logger.info("%s" % is_faint)
     return is_faint
 
+
 # boolean function: always passes every star, for testing
 def fake_bool(target):
     logger.info("done")
     return True
 
-# outputs dict of functions that finds faulty stars
+
+# function, outputs dict of functions that finds faulty stars
 #   and kics that fall in those functions
 def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntargets=100):
     full_dict = {}
@@ -227,6 +235,7 @@ def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntarg
     logger.info("done")
     return full_dict
 
+
 # helper function for improve_aperture, pads any image to desired shape with pad_val
 def pad_img(img, desired_shape, positions, pad_val=0):
     if len(desired_shape) != len(positions):
@@ -241,7 +250,8 @@ def pad_img(img, desired_shape, positions, pad_val=0):
         pads.append((position, pad_len))
     return np.pad(img, pads, mode='constant', constant_values=pad_val)
 
-# wrapper for pad_img to determine position of the image (top, bottom, left, right)
+
+# function, pads image to fit desired_shape and fill up extra space with pad_val
 def pad_img_wrap(img, desired_shape, sides, pad_val=0):
     offset_x = 0
     offset_y = 0
@@ -253,9 +263,10 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
     logger.info("done")
     return img
 
+
 # helper function for remove_second_star, determines how second star is detected
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
-    min_bright = factor * (np.max(img)) #- np.min(img[np.nonzero(img)]))
+    min_bright = factor * (np.max(img))
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [any(others)
                 , is_n_bools(others, 1, lambda x: x == 0)
@@ -263,6 +274,7 @@ def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
                 , xi0j0 >= min_bright
                 ]
     return all(booleans)
+
 
 # helper function for improve_aperture, removes any detected second stars
 def remove_second_star(img, min_factor):
@@ -277,7 +289,8 @@ def remove_second_star(img, min_factor):
         img[i, j] = 0
     return img
 
-# inserts new aperture in the target information and data
+
+# function, inserts new aperture in the target information and data
 def img_to_new_aperture(target, img, image_region=15):
     target.img = img
     ii, jj = target.center
@@ -295,6 +308,7 @@ def img_to_new_aperture(target, img, image_region=15):
     logger.info("done")
     return img
 
+
 # helper function for isolate_star_cycle
 def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
     new_arr = arr if is_decreasing else np.flip(arr, 0)
@@ -307,6 +321,7 @@ def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
         if all(diffs[list(diff)] > diff_flux) and not (arr[i] == 0 and all(arr[[i-1, i+1]] != 0)):
             return diff[0] if is_decreasing else len(arr)-(diff[-1]+1)
     return -1 if is_decreasing else 0
+
 
 # helper function for improve_aperture, removes other potential stars
 # relax_pixels is how relaxed the function is
@@ -340,7 +355,8 @@ def isolate_star_cycle(img, ii, jj, relax_pixels=2, image_region=15):
 
     return img
 
-# main function to improve aperture and remove other stars from initial apertures
+
+# function, main function to improve aperture and remove other stars from initial apertures
 def improve_aperture(target, mask=None, relax_pixels=2, second_factor=0.7, image_region=15):
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
@@ -373,6 +389,7 @@ def improve_aperture(target, mask=None, relax_pixels=2, second_factor=0.7, image
     logger.info("done")
     return target.img
 
+
 # helper that creates mask to overlay aperture with from rough psf from lightkurve package
 def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     tar = target.target
@@ -385,7 +402,8 @@ def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     mask = np.where(prf > mask_factor*np.max(prf), 1, 0)
     return mask
 
-# finalises improved aperture with functions)
+
+# function, finalises improved aperture with functions)
 def calculate_better_aperture(target, mask_factor=0.001, relax_pixels=2, \
                               second_factor=0.7, image_region=15):
     mask = calculate_aperture_mask(target, mask_factor, image_region)
@@ -393,12 +411,14 @@ def calculate_better_aperture(target, mask_factor=0.001, relax_pixels=2, \
     logger.info("done")
     return 0
 
+
 # helper, completes logical arr on given arrays, all arrays should be same size
 def logical_or_all_args(*args):
     result = np.zeros_like(args[0])
     for arg in args:
         result += arg
     return np.where(result != 0, 1, 0)
+
 
 # helper that creates mask for the other stars in the background
 def make_background_mask(target, img, coords, max_factor=0.2, model_pix=15):
@@ -411,7 +431,9 @@ def make_background_mask(target, img, coords, max_factor=0.2, model_pix=15):
     mask = logical_or_all_args(max_mask, targets_mask)
     return mask
 
-# models the background variation and removes it to calculate the light curves
+
+# function, models the background variation and removes it to calculate the light curves
+# models background as median of masked background
 def model_background(target, max_factor=0.2, model_pix=15):
     coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
                          target.center[1]-model_pix, target.center[1]+model_pix], \

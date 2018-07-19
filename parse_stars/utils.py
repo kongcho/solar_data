@@ -1,8 +1,9 @@
+from settings import setup_logging
+logger = setup_logging()
+
 import csv
 import funcsigs
-from settings import setup_logging
 
-logger = setup_logging()
 
 # checks if given kids have data from q1-17 kepler targets
 # assume all kids are unique and all data exists
@@ -196,3 +197,11 @@ def get_sub_kwargs(func, **kwargs):
     sig = funcsigs.signature(func)
     func_kwargs = get_union_dic(kwargs, sig.parameters)
     return func_kwargs
+
+# builds array of strings and a counter as part of the string
+def build_arr_n_names(name, n):
+    arr = []
+    max_digits = len(str(n))
+    for i in range(n):
+        arr.append(("%s_%0" + str(max_digits) + "d") % (name, i))
+    return arr

@@ -1,7 +1,6 @@
 # TODO: TO FIX UP
 
 from settings import setup_logging, filename_stellar_params
-
 logger = setup_logging()
 
 """

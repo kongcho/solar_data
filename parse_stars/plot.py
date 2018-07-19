@@ -1,26 +1,20 @@
-# TODO: FIX IT UP
+from utils import get_sub_kwargs, clip_array, build_arr_n_names
+from aperture import run_photometry, improve_aperture, \
+    calculate_better_aperture, model_background, make_background_mask
+from settings import setup_logging, mpl_setup
 
-import logging
+logger = setup_logging()
+mpl_setup()
+
 import os
 import csv
 import numpy as np
-
-import matplotlib
-if os.environ.get('DISPLAY','') == "":
-    print("Using non-interactive Agg backend")
-    matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib import gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
 
-from utils import get_sub_kwargs, clip_array
-from aperture import run_photometry, improve_aperture, \
-    calculate_better_aperture, model_background, make_background_mask
-from settings import setup_logging
 
-logger = setup_logging()
-
-# creates plot for one target, assumes already have obs_flux, flux_uncert
+# function, creates plot for one target, assumes already have obs_flux, flux_uncert
 def plot_data(target, count=0):
     fig = plt.figure(figsize=(11,8))
     gs.GridSpec(3,3)
@@ -43,9 +37,9 @@ def plot_data(target, count=0):
     logger.info("done")
     return fig
 
-# helper function for plot_targets that sets up photometry of a star
-#   runs a photometry and tests a list of boolean functions on it
-#   then creates a plot for it with plot_data
+
+# helper for plot_targets that sets up photometry of a star
+# runs a photometry and tests a list of boolean functions on it then creates a plot for it
 def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
                    min_val=5000, ntargets=100):
     target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
@@ -61,7 +55,8 @@ def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
     logger.info("done")
     return target
 
-# plots list of targets to a filename if the boolean function is true
+
+# function, plots list of targets to a filename if the boolean function is true
 def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     filename = filename.rsplit(".", 1)[0]
     total = len(targets)
@@ -86,7 +81,8 @@ def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     logger.info("done")
     return parsed_targets
 
-# plots light curves after each given function
+
+# function, plots light curves after each given function
 # kwargs is any optional argument for any function
 def plot_functions(targ, fout="./", save_fig=True, *funcs, **kwargs):
     target = run_photometry(targ)
@@ -113,12 +109,17 @@ def plot_functions(targ, fout="./", save_fig=True, *funcs, **kwargs):
     logger.info("done")
     return target
 
+
+# helper, plots a box for given coordinates
 def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
     plt.plot([x1, x1], [y1, y2], marker, **kwargs)
     plt.plot([x2, x2], [y1, y2], marker, **kwargs)
     plt.plot([x1, x2], [y1, y1], marker, **kwargs)
     plt.plot([x1, x2], [y2, y2], marker, **kwargs)
 
+
+# function, plots the different light curves for original calculation, with improved aperture,
+#   and the effects of background modelling
 def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, \
                               max_factor=0.2, min_img=-1000, max_img=1000, save_pdf=True):
     target = run_photometry(targ)
@@ -222,13 +223,7 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
     logger.info("done")
     return target
 
-def build_arr_n_names(name, n):
-    arr = []
-    max_digits = len(str(n))
-    for i in range(n):
-        arr.append(("%s_%0" + str(max_digits) + "d") % (name, i))
-    return arr
-
+# function, prints calculated light curves before and after improvement to text file
 def print_lc_improved(kics, fout, image_region=15):
     names = ["KIC"] + build_arr_n_names("img", 900) + \
             build_arr_n_names("flux_old", 52) + build_arr_n_names("uncert_old", 4) + \

@@ -1,12 +1,11 @@
-import matplotlib.pyplot as plt
-from astropy.modeling import models, fitting
-import numpy as np
-
 from aperture import run_photometry
-from settings import setup_main_logging
+from settings import setup_main_logging, mpl_setup
 logger = setup_main_logging()
 
+import numpy as np
+from astropy.modeling import models, fitting
 from scipy import optimize
+
 
 def sine_model(x, inits):
     return inits[0]*np.sin(2*np.pi*inits[1]*x + inits[2])
@@ -151,4 +150,5 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    mpl_setup()
     main()

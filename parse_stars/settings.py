@@ -1,17 +1,20 @@
 import logging
 import sys
+import os
 
 ## Setup
 f3_location = "./f3"
 results_folder = "./results/"
-output_folder = "./tests/"
+output_folder = "./results/"
 ffidata_folder = "./ffidata/"
+
 
 ## Input Files to change
 filename_periods = "./data/Table_Periodic.txt"
 filename_nonperiods = "./data/Table_Non_Periodic.txt"
 filename_stellar_params = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
 kepmag_file_prefix = "./data/kepler_fov_search"
+
 
 ## Output Files to change
 file_name = "good_kids"
@@ -34,9 +37,18 @@ def set_filenames_based_on_folders(data_folder="./data/"):
         file_name = targets_files_temp[0]
         targets_files = targets_files_temp
 
+
+## Matplotlib Setup
+def mpl_setup():
+    import matplotlib
+    if os.environ.get('DISPLAY','') == "":
+        print("Using non-interactive Agg backend")
+        matplotlib.use('Agg')
+
+
 ## Logging
 # removes warning messages from kplr that is propagated to f3
-
+# setup logging for different modules
 def setup_logging():
     format_str = '%(asctime)s [%(levelname)s]\t%(name)s-%(module)-10s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
@@ -50,6 +62,7 @@ def setup_logging():
 
     return logger
 
+# setup logging for when file is being run and not imported
 def setup_main_logging():
     format_str = '%(asctime)s [%(levelname)s]\t%(name)s - %(module)s: %(message)s'
     formatter = logging.Formatter(format_str)
