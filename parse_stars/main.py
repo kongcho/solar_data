@@ -23,6 +23,31 @@ from plot import *
 
 logger = setup_main_logging()
 
+def print_lc(kics, fout, image_region=15):
+    is_first = True
+    with open(fout, "w") as f:
+        writer = csv.writer(f, delimiter=',', lineterminator='\n')
+        for kic in kics:
+            target = run_photometry(kic)
+            if target == 1:
+                continue
+            if is_first:
+                names = ["KIC"] + build_arr_n_names("img", 900) + \
+                        map(str, target.times) + build_arr_n_names("uncert_old", 4)
+                writer.writerow(names)
+                is_first = False
+            calculate_better_aperture(target, 0.001, 2, 0.7, image_region=image_region)
+            arr = np.concatenate([np.asarray([kic]), target.img.flatten(), \
+                                  target.obs_flux, target.flux_uncert])
+            model_background(target, 0.2, 15)
+            # arr = np.append(arr, target.obs_flux)
+            # arr = np.append(arr, target.flux_uncert)
+            writer.writerow(arr)
+            logger.info("done: %s" % kic)
+    logger.info("done")
+    return 0
+
+
 def testing(targ):
     target = run_photometry(targ)
     return target.times, target.obs_flux
@@ -80,8 +105,9 @@ def main():
     kics = ["11913365"] #, "11913377"] + ben_kics
 
     # SIMPLE TESTS
-    for kic in kics:
-        print testing(kic)
+    # for kic in kics:
+    #     print testing(kic)
+    print_lc(kics, "out_pc.csv")
 
     make_sound(0.3, 440)
     logger.info("### everything done ###")

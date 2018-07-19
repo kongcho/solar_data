@@ -229,7 +229,7 @@ def build_arr_n_names(name, n):
         arr.append(("%s_%0" + str(max_digits) + "d") % (name, i))
     return arr
 
-def print_lc_improved_aperture(kics, fout, image_region=15):
+def print_lc_improved(kics, fout, image_region=15):
     names = ["KIC"] + build_arr_n_names("img", 900) + \
             build_arr_n_names("flux_old", 52) + build_arr_n_names("uncert_old", 4) + \
             build_arr_n_names("flux_new", 52) + build_arr_n_names("uncert_new", 4)

@@ -14,6 +14,8 @@ quick:
 	rm -f screenlog.0
 	rm -f *.tar.gz
 	rm -f *.zip
+	rm -f f3/f3/*pyc
+	rm -f f3/f3/__pycache__/
 
 clean:
 	rm -rf venv
