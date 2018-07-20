@@ -5,7 +5,7 @@ import os
 ## Setup
 f3_location = "./f3"
 results_folder = "./results/"
-output_folder = "./results/"
+output_folder = "./tests/"
 ffidata_folder = "./ffidata/"
 
 
@@ -64,7 +64,7 @@ def setup_logging():
 
 # setup logging for when file is being run and not imported
 def setup_main_logging():
-    format_str = '%(asctime)s [%(levelname)s]\t%(name)s - %(module)s: %(message)s'
+    format_str = '%(asctime)s [%(levelname)s]\t%(name)s-%(module)-10s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
 
     # for stderr

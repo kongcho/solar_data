@@ -205,3 +205,8 @@ def build_arr_n_names(name, n):
     for i in range(n):
         arr.append(("%s_%0" + str(max_digits) + "d") % (name, i))
     return arr
+
+# makes a beep
+def make_sound(duration=0.3, freq=440):
+    os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
+    return 0

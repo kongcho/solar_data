@@ -10,6 +10,34 @@ os.sys.path.append(f3_location)
 from f3 import photometry
 
 
+# helper function for improve_aperture, pads any image to desired shape with pad_val
+def pad_img(img, desired_shape, positions, pad_val=0):
+    if len(desired_shape) != len(positions):
+        logger.error("pad_img: odd required shape dimensions")
+        return img
+    pads = []
+    for i, position in enumerate(positions):
+        pad_len = desired_shape[i] - position - img.shape[i]
+        if pad_len < 0 or position < 0:
+            logger.error("pad_img: invalid positions")
+            return img
+        pads.append((position, pad_len))
+    return np.pad(img, pads, mode='constant', constant_values=pad_val)
+
+
+# function, pads image to fit desired_shape and fill up extra space with pad_val
+def pad_img_wrap(img, desired_shape, sides, pad_val=0):
+    offset_x = 0
+    offset_y = 0
+    if "Top" in sides:
+        offset_y += desired_shape[0]-img.shape[0]
+    if "Left" in sides:
+        offset_x += desired_shape[1]-img.shape[1]
+    img = pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
+    logger.info("done")
+    return img
+
+
 # helper function for different functions
 # runs find_other_sources under different parameters to change the aperture
 def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
@@ -25,18 +53,18 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
 
     target.data_for_target(do_roll=True, ignore_bright=0)
 
-    jj, ii = target.center
-    jj, ii = int(jj), int(ii)
+    ii, jj = target.center
+    ii, jj = int(ii), int(jj)
 
     img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)\
-                 [:,jj-image_region:jj+image_region, ii-image_region:ii+image_region], axis=0)
+                 [:,ii-image_region:ii+image_region, jj-image_region:jj+image_region], axis=0)
 
     if (img.shape != (image_region*2, image_region*2)):
         sides = []
-        if jj + image_region > target.targets.shape[0]:
-            sides += "Top"
-        if ii + image_region > target.targets.shape[1]:
-            sides += "Left"
+        if ii - image_region < 0:
+            sides.append("Top")
+        if jj - image_region < 0:
+            sides.append("Left")
         img = pad_img_wrap(img, (image_region*2, image_region*2), sides)
 
     setattr(photometry.star, 'img', img)
@@ -236,34 +264,6 @@ def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntarg
     return full_dict
 
 
-# helper function for improve_aperture, pads any image to desired shape with pad_val
-def pad_img(img, desired_shape, positions, pad_val=0):
-    if len(desired_shape) != len(positions):
-        logger.error("pad_img: odd required shape dimensions")
-        return img
-    pads = []
-    for i, position in enumerate(positions):
-        pad_len = desired_shape[i] - position - img.shape[i]
-        if pad_len < 0 or position < 0:
-            logger.error("pad_img: invalid positions")
-            return img
-        pads.append((position, pad_len))
-    return np.pad(img, pads, mode='constant', constant_values=pad_val)
-
-
-# function, pads image to fit desired_shape and fill up extra space with pad_val
-def pad_img_wrap(img, desired_shape, sides, pad_val=0):
-    offset_x = 0
-    offset_y = 0
-    if "Top" in sides:
-        offset_y += desired_shape[0]-img.shape[0]
-    if "Left" in sides:
-        offset_x += desired_shape[1]-img.shape[1]
-    img = pad_img(img, desired_shape, (offset_y, offset_x), pad_val)
-    logger.info("done")
-    return img
-
-
 # helper function for remove_second_star, determines how second star is detected
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
     min_bright = factor * (np.max(img))
@@ -455,3 +455,12 @@ def model_background(target, max_factor=0.2, model_pix=15):
     logger.info("done")
     return target
 
+
+# helper, gets aperture center if the star is within image_region of edge of postcard
+def get_aperture_center(target, image_region=15):
+    aperture_center = [image_region, image_region]
+    for i in range(2):
+        center_i = int(target.center[i])
+        if center_i < image_region:
+            aperture_center[i] = center_i
+    return aperture_center

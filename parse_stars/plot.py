@@ -1,5 +1,5 @@
 from utils import get_sub_kwargs, clip_array, build_arr_n_names
-from aperture import run_photometry, improve_aperture, \
+from aperture import run_photometry, improve_aperture, get_aperture_center, \
     calculate_better_aperture, model_background, make_background_mask
 from settings import setup_logging, mpl_setup
 
@@ -223,33 +223,54 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
     logger.info("done")
     return target
 
-# function, prints calculated light curves before and after improvement to text file
-def print_lc_improved(kics, fout, image_region=15):
-    names = ["KIC"] + build_arr_n_names("img", 900) + \
-            build_arr_n_names("flux_old", 52) + build_arr_n_names("uncert_old", 4) + \
-            build_arr_n_names("flux_new", 52) + build_arr_n_names("uncert_new", 4)
 
+# function, prints aperture, calculated light curves before and after improvement to 3 different text files
+def print_lc_improved(kics, fouts):
+    fout0, fout1, fout2 = fouts
+    successes = 0
     is_first = True
-    with open(fout, "w") as f:
-        writer = csv.writer(f, delimiter=',', lineterminator='\n')
+
+    names0 = ["KIC"] + build_arr_n_names("postcard_center", 2) + \
+             build_arr_n_names("aperture_center", 2) + build_arr_n_names("img", 900)
+    names1 = ["KIC"] + build_arr_n_names("flux_old", 52) + build_arr_n_names("est_unc_old", 4) + \
+             build_arr_n_names("mod_unc_old", 52)
+    names2 = ["KIC"] + build_arr_n_names("flux_new", 52) + build_arr_n_names("est_unc_new", 4) + \
+             build_arr_n_names("mod_unc_new", 52)
+
+    with open(fout0, "ab") as f0, open(fout1, "ab") as f1, open(fout2, "ab") as f2:
+        w0 = csv.writer(f0, delimiter=',', lineterminator='\n')
+        w1 = csv.writer(f1, delimiter=',', lineterminator='\n')
+        w2 = csv.writer(f2, delimiter=',', lineterminator='\n')
+
         for kic in kics:
             target = run_photometry(kic)
             if target == 1:
                 continue
             if is_first:
-                names = ["KIC"] + build_arr_n_names("img", 900) + \
-                        map(str, target.times) + build_arr_n_names("uncert_old", 4) + \
-                        map(str, target.times) + build_arr_n_names("uncert_new", 4)
-                writer.writerow(names)
+                names1 = map(str, target.times) + build_arr_n_names("est_unc_old", 4) + \
+                         build_arr_n_names("mod_unc_old", 52)
+                names2 = map(str, target.times) + build_arr_n_names("uncert_new", 4) + \
+                         build_arr_n_names("mod_unc_new", 52)
+                w0.writerow(names0)
+                w1.writerow(names1)
+                w2.writerow(names2)
                 is_first = False
-            calculate_better_aperture(target, 0.001, 2, 0.7, image_region=image_region)
-            arr = np.concatenate([np.asarray([kic]), target.img.flatten(), \
-                                  target.obs_flux, target.flux_uncert])
-            model_background(target, 0.2, 15)
-            arr = np.append(arr, target.obs_flux)
-            arr = np.append(arr, target.flux_uncert)
-            writer.writerow(arr)
-            logger.info("done: %s" % kic)
-    logger.info("done")
-    return 0
 
+            target.model_uncert()
+            calculate_better_aperture(target, 0.001, 2, 0.7, 15)
+            arr0 = np.concatenate([np.asarray([kic]), target.center, get_aperture_center(target), \
+                                   target.img.flatten()])
+            arr1 = np.concatenate([np.asarray([kic]), target.obs_flux, \
+                                   target.flux_uncert, target.target_uncert])
+            model_background(target, 0.2, 15)
+            arr2 = np.concatenate([np.asarray([kic]), target.obs_flux, \
+                                   target.flux_uncert, target.target_uncert])
+
+            w0.writerow(arr0)
+            w1.writerow(arr1)
+            w2.writerow(arr2)
+
+            successes += 1
+            logger.info("done: %s" % kic)
+    logger.info("done: %d kics", successes)
+    return 0
