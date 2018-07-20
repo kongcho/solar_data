@@ -1,6 +1,4 @@
 from aperture import run_photometry
-from settings import setup_main_logging, mpl_setup
-logger = setup_main_logging()
 
 import numpy as np
 from astropy.modeling import models, fitting
@@ -150,5 +148,10 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    from settings import setup_main_logging, mpl_setup
+    logger = setup_main_logging()
+
+    setup_main_logging
     mpl_setup()
+
     main()
