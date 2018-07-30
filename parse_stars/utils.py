@@ -3,7 +3,7 @@ logger = setup_logging()
 
 import csv
 import funcsigs
-
+import numpy as np
 
 # checks if given kids have data from q1-17 kepler targets
 # assume all kids are unique and all data exists
@@ -205,4 +205,3 @@ def build_arr_n_names(name, n):
     for i in range(n):
         arr.append(("%s_%0" + str(max_digits) + "d") % (name, i))
     return arr
-

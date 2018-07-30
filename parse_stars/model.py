@@ -1,9 +1,13 @@
 from aperture import run_photometry
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 from astropy.modeling import models, fitting
 from scipy import optimize
 
+def damped_sine_model(x, inits):
+    return inits[0]*np.exp(-1*inits[1]*x)*np.sin(2*np.pi*inits[2]*x + inits[3])
 
 def sine_model(x, inits):
     return inits[0]*np.sin(2*np.pi*inits[1]*x + inits[2])
@@ -11,16 +15,16 @@ def sine_model(x, inits):
 def log_model(x, inits):
     return inits[0] + inits[1]*np.log(x)
 
-def simple_err_func(x, y, fit_func, init_arr):
-    return fit_func(init_arr, x) - y
+def simple_err_func(inits, x, y, model_func):
+    return model_func(x, inits) - y
 
-def make_scipy_model(x, y, fit_func, err_func, init_arr):
-    p, success = optimize.leastsq(err_func, init_arr[:], args=(x, y))
-    model = fit_func(p, x)
-    return model
+def make_scipy_model(x, y, label, model_func, err_func, init_arr):
+    p, success = optimize.leastsq(err_func, init_arr[:], args=(x, y, model_func))
+    model = model_func(x, p)
+    return model, label
 
-def make_astropy_model(x, y, model, fitting, label="", *args, **kwargs):
-    init = model(*args, **kwargs)
+def make_astropy_model(x, y, label, model_func, fitting, *args, **kwargs):
+    init = model_func(*args, **kwargs)
     fit = fitting
     m = fit(init, x, y)
     model = m(x)
@@ -63,45 +67,81 @@ def plot_many_plots(x, y, titles=None, *models):
 
 def determine_accuracy(x, y, model):
     var = np.square(y-model).sum()
-
     accuracy = var
     return accuracy
 
-def run_through_models(target, x, y, yerr):
-    reses = [make_astropy_model(x, y, models.Const1D, fitting.LinearLSQFitter(), "Const1D") \
-             # , make_astropy_model(x, y, models.Linear1D, fitting.LinearLSQFitter(), "Linear1D") \
-             # , make_astropy_model(x, y, models.Polynomial1D, fitting.LevMarLSQFitter(), "Polynomial1D", 3)) \
-             , make_astropy_model(x, y, models.PowerLaw1D, fitting. LevMarLSQFitter(), "PowerLaw1D", alpha=0.01) \
+def estimate_freqs(times, max_years=13, times_per_year=0.15):
+    qt_factor = np.ptp(times)/(18*90)
+    year_factor = 365*qt_factor
+    good_periods = np.arange(0, max_years, factor_per_year)*year_factor
+
+    good_freqs = np.divide(1.0, good_periods)
+    filtered_is = np.isposinf(good_freqs)
+    good_freqs = good_freqs[np.logical_not(filtered_is)]
+    return good_freqs
+
+def run_through_models(target, x, y, yerr, do_plot=True):
+    reses = [make_astropy_model(x, y, "Const1D", models.Const1D, \
+                                fitting.LinearLSQFitter()) \
+             , make_astropy_model(x, y, "Linear1D", models.Linear1D, \
+                                  fitting.LinearLSQFitter()) \
+             , make_astropy_model(x, y, "Poly1D", models.Polynomial1D, \
+                                  fitting.LinearLSQFitter(), 1) \
              ]
 
-    # for freq in np.arange(0, 0.01, 0.001):
-    #     reses.append(make_astropy_model(x, y, models.Sine1D, fitting.LevMarLSQFitter(), "Sine1D %f" % freq, frequency=freq))
+    damped_sine_inits = [0.01, 0.001, 0.001, 0]
+    lab_ds = "DampedSine " + str(damped_sine_inits)
+    reses.append(make_scipy_model(x, y, lab_ds, damped_sine_model, simple_err_func, \
+                                  [0.01, 0.001, 0.001, 0]))
 
-    mods = []
+    for freq in estimate_freqs(x, 13, 0.15):
+        reses.append(make_astropy_model(x, y, "Sine1D %f" % freq, models.Sine1D, \
+                                        fitting.LevMarLSQFitter(), frequency=freq))
+
     labs = []
+    mods = []
     accs = []
     for res in reses:
-        model, label = res
-        mods.append(model)
-        labs.append(label)
-        accs.append(determine_accuracy(x, y, model))
+        mod, lab = res
+        labs.append(lab)
+        mods.append(mod)
+        accs.append(determine_accuracy(x, y, mod))
 
-    fig_lines = plot_many_lines(x, y, yerr, labs, *mods)
+    if do_plot:
+        fig_lines = plot_many_lines(x, y, yerr, labs, *mods)
+        plt.show()
+        plt.close("all")
 
-    plt.show()
-    plt.close("all")
-
-    best_i = np.argmin(accs)
-
-    print "BEST FIT for %s is %s: %f" % (target.kic, labs[best_i], accs[best_i])
-
-    return accs
+    logger.info("done: %d models" % len(mods))
+    return labs, accs
 
 def build_errorbars(err, x, qs):
     error_list = np.zeros_like(x)
     for i in range(len(err)):
         g = np.where(qs == i)[0]
         error_list[g] += err[i]
+
+def is_variable(targ, do_plot=True):
+    target = run_photometry(targ)
+    if target == 1:
+        return target
+
+    y = target.obs_flux-1
+    x = target.times
+    yerr = build_errorbars(target.flux_uncert, x, target.qs)
+
+    good_indexes = np.logical_not(np.isnan(y))
+    y = y[good_indexes]
+    x = x[good_indexes]
+
+    labs, accs = run_through_models(target, x, y, yerr, do_plot)
+    best_i = np.argmin(accs)
+    print "BEST FIT for %s is %s: %f" % (target.kic, labs[best_i], accs[best_i])
+
+    bools = [not labs[best_i] == "Const1D"]
+    result = all(bools)
+    logger.info("done: %s" % result)
+    return result
 
 def main():
     ben_kics = ["2694810"
@@ -134,24 +174,20 @@ def main():
                 ]
 
     kics = ben_kics
+    kics = ["4726114", "6263983", "10087863"]
 
     for targ in kics:
-        target = run_photometry(targ)
-        if target == 1:
-            continue
-
-        y = target.obs_flux-1
-        x = target.times
-        yerr = build_errorbars(target.flux_uncert, x, target.qs)
-        run_through_models(target, x, y, yerr)
+        is_variable(targ, do_plot=True)
 
     return 0
 
 if __name__ == "__main__":
     from settings import setup_main_logging, mpl_setup
     logger = setup_main_logging()
-
     setup_main_logging
     mpl_setup()
 
     main()
+else:
+    from settings import setup_logging
+    logger = setup_logging()

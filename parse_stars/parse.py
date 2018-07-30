@@ -1,13 +1,26 @@
-"""
-TODO:
-- make general function to parse filename_stellar_params
-- JUST FIX IT UP
-"""
-
 from utils import does_path_exists
-from settings import setup_logging
+from settings import setup_logging, filename_stellar_params
 
 logger = setup_logging()
+
+
+"""
+different tables
+- filename_stellar_params ie list of 197k stars
+  - "good kepler stars"
+  - no labels tho :'(
+  - " ", skip 0
+- table_periodic ie is periodic or not
+  - has labels
+  - ",", skip 1
+- kepler_fov_search
+  - has a lotttt of info shit
+  - ugly af
+  - can tell u if u have bright neighbours or not
+  - ",", skip 2
+"""
+
+
 
 # prints one dict of kid, kepmag, angsep to csv file
 def dict_to_file(fout, dicts, keys=None, bypass_prompt=True):
@@ -41,7 +54,6 @@ def dicts_to_file(filename, dicts, keys=None, bypass_prompt=True):
                 write_f.write(dicts[i][keys[key_i]] + ",")
             write_f.write(dicts[i][keys[-1]] + "\n")
     return 0
-# TODO: TO FIX UP
 
 # helper for remove_bright_neighbours_together()
 def element_is_not_in_list(arr, n):
@@ -203,3 +215,69 @@ def remove_bright_neighbours_separate(folder, fout_prefix, difference_max=2.0):
     logger.info("printed " + str(len(batch_kids)) + " kids with neighbours")
     logger.info("remove_bright_neighbours_separate done")
     return 0
+
+# TODO: function
+def get_table_params(kics, params, fout, table_file=filename_stellar_params):
+    if "Kepler_ID" not in params:
+        params = ["Kepler_ID"] + params
+    params_list = []
+    curr_dicts = []
+    with open(table_file) as input_f:
+        curr_line = input_f.readline().strip()
+        if curr_line[:13] == "Input line 1:": #id line
+            fieldnames = input_f.readline().strip().split(',')
+            input_f.readline() #types, useless line
+            for f_i, fieldname in enumerate(fieldnames):
+                if len(params_list) == len(params):
+                    break
+                for param in params:
+                    if fieldname == param:
+                        params_list.append((param, f_i))
+            if len(params_list) != len(params):
+                print(params)
+                logger.error("Error: not all params found")
+                return 1
+        else:
+            logger.error("Error: file doesn't have right format")
+        for line in input_f:
+            if line[:10] == "Input line":
+                continue
+            curr_dict = {}
+            curr_data = line.strip().split(',')
+            for par, par_i in params_list:
+                curr_dict[par] = curr_data[par_i]
+            curr_dicts.append(curr_dict)
+    dict_to_file(fout, curr_dicts)
+    if len(kics) != len(curr_dicts):
+        logger.error("Error: not all kics are processed")
+    logger.debug("get_table_params done")
+    return 0
+
+# TODO: function
+def get_mast_params(target, params):
+    data = target.mast_request("kepler", "Kepler_ID")
+    print(data)
+    return
+
+# TODO: function
+def is_faint_table(target, min_kepmag=15, table_file=filename_stellar_params):
+    with open(table_file) as input_f:
+        curr_line = input_f.readline().strip()
+        if curr_line[:13] == "Input line 1:": #id line
+            fieldnames = input_f.readline().strip().split(',')
+            input_f.readline() #types, useless line
+            for f_i, fieldname in enumerate(fieldnames):
+                if fieldname == "Kepler_ID":
+                    kid_col_no = f_i
+                if fieldname == "kepmag":
+                    kepmag_col_no = f_i
+        if curr_line[kid_col_no] == target:
+            return curr_line[kepmag_col_no] > min_kepmag
+        for line in input_f:
+            if line[:10] == "Input line":
+                continue
+            curr_data = line.strip().split(',')
+            if curr_data[kid_col_no] == target:
+                return curr_data[kepmag_col_no] > min_kepmag
+    logger.debug("get_table_params done")
+    return False
