@@ -15,7 +15,6 @@ class session(object):
         return r
 
 class mast_api(object):
-
     def __init__(self):
         self.missions = ["kepler", "k2"]
         self.tables_kep = ["data_search", "kepler_fov", "kic10", "kgmatch", \
@@ -32,7 +31,10 @@ class mast_api(object):
         self.mission_url = self.base_url.format("archive") + "{0}/{1}/search.php"
         self.other_missions_url = self.base_url.format("archive") + "{0}/search.php"
 
-    def _check_url_exists(self, mission, table):
+    def _check_url_exists(self, mission, table, form):
+        if form not in self.outputs:
+            logger.error("format doesn't exist")
+            return 1
         if mission in self.missions and table in self.tables_kep or table in self.tables_k2:
             self.url = self.mission_url.format(mission, table)
         elif mission in self.other_missions:
@@ -41,9 +43,9 @@ class mast_api(object):
             logger.error("url doesn't exist to make mast request")
             return 1
 
-    def _get_mission_params(self, mission, table=None, params={}, form="JSON", \
-                            maxrec=100000, **kwargs):
-        if self._check_url_exists(mission, table) == 1:
+    def _get_mission_params(self, mission, table=None, params={}, output_params="", \
+                            form="JSON", maxrec=100000, **kwargs):
+        if self._check_url_exists(mission, table, form) == 1:
             return None
         param_dict = {"action": "Search",
                       "showquery": "on",
@@ -51,6 +53,8 @@ class mast_api(object):
                       "outputformat": form,
                       "params": params
         }
+        if output_params is not None:
+            param_dict.update({"selectedColumnsCsv": output_params})
         param_dict.update(kwargs)
         r = session(self.url).get(params=param_dict)
         if r.status_code == 200:
@@ -58,10 +62,10 @@ class mast_api(object):
             return r
         return None
 
-    def _parse_json_output(self, mission, params, output_params, table=None, \
-                           form="JSON", maxrec=100000, **kwargs):
+    def _parse_json_output(self, mission, table=None, params={}, output_params=[], \
+                           maxrec=100000, **kwargs):
         new_arr = []
-        r = self._get_mission_params(mission, params, table, form, maxrec, **kwargs)
+        r = self._get_mission_params(mission, table, params, form="JSON", maxrec=maxrec, **kwargs)
         if r is None:
             return None
         json_arr = r.json()
@@ -73,8 +77,8 @@ class mast_api(object):
             new_arr.append(new_dict)
         return new_arr
 
-    def get_target_params(self, params, **kwargs):
-        return self._get_mission_params("kepler", "kepler_fov", params, "JSON", **kwargs)
+    def parse_target_params(self, params, output_params, **kwargs):
+        return self._parse_json_output("kepler", "kepler_fov", params, output_params, **kwargs)
 
     def get_caom_params(self, columns, filters, form="json", page_size=400000, **kwargs):
         url = self.base_url.format("mast") + "api/v0/invoke"

@@ -8,8 +8,6 @@ import csv
 import json
 
 class new_star(object):
-    # field names for filename_stellar_params
-    stellar_params = []
 
     def __init__(self, kic, table_file):
         table_file = "./tests/lc_data_new.out"
@@ -39,54 +37,85 @@ class new_star(object):
         self.times = fields[1:53]
         return 0
 
-class table_api(object):
-    def __init__(self, table_file):
-        self.filename = table_file
 
-    # function, can parse through kepler_fov_search* and table_periodic tables
-    def parse_table_col(self, col_nos, delimiter=",", skip_rows=0, is_dic_not_arr=True, \
-                        params=None, types=None, kics=None, kic_col_no=0, n=100):
-        counter = 0 #TBD
-        completed_kics = [False]*len(kics) if kics is not None else [False]
-        if params is None:
-            params = map(str, col_nos)
-        if is_dic_not_arr:
-            whole = {}
-            for param in params:
-                whole[param] = []
-        else:
-            whole = []
-            if kic_col_no is not None:
-                try:
-                    col_nos.remove(kic_col_no)
-                except:
-                    pass
+class table_api(object):
+
+    def __init__(self, table_file, delimiter=",", skip_rows=0, kic_col_no=None):
+        self.filename = table_file
+        self.delimiter = delimiter
+        self.skip_rows = skip_rows
+        self.kic_col_no = kic_col_no
+
+    # function, gets columns indexes of given param names to parse table by column number
+    def get_col_nos(self, params_want, field_names):
+        col_nos = []
+        for i, field in enumerate(field_names):
+            if field in params:
+                col_nos.append(i)
+        return col_nos
+
+    def get_col_nos_table(self, row_index, params):
         with open(self.filename, "r") as f:
-            for _ in range(skip_rows):
+            for _ in range(row_index):
                 next(f)
-            r = csv.reader(f, delimiter=delimiter, skipinitialspace=True)
+            line = next(f)
+        field_names = [x.strip() for x in line.split(self.delimiter)]
+        return self.get_col_nos(params, field_names)
+
+    def parse_table_arrs(self, col_nos, kics=None, types=None, n=100):
+        completed_kics = [False]*len(kics) if kics is not None else [False]
+        whole = []
+        if self.kic_col_no is not None:
+            try:
+                col_nos.remove(self.kic_col_no)
+            except:
+                pass
+        with open(self.filename, "r") as f:
+            for _ in range(self.skip_rows):
+                next(f)
+            r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             for i, row in enumerate(r):
-                counter += 1 #TBD
-                if counter == n: #TBD
+                if i == n or all(completed_kics): #TBD
                     return whole #TBD
-                if all(completed_kics):
-                    return whole
                 if kics is not None:
-                    if row[kic_col_no] in kics:
-                        completed_kics[kics.index(row[kic_col_no])] = True
+                    if row[self.kic_col_no] in kics:
+                        completed_kics[kics.index(row[self.kic_col_no])] = True
                     else:
                         continue
-                if not is_dic_not_arr:
-                    param_arr = []
+                param_arr = []
                 for j, no in enumerate(col_nos):
                     if types is not None:
                         row[no] = types[j](row[no])
-                    if is_dic_not_arr:
-                        whole[params[j]].append(row[no])
+                    param_arr.append(row[no])
+                whole.append(param_arr)
+        return whole
+
+    # function, can parse through kepler_fov_search* and table_periodic tables
+    def parse_table_dicts(self, col_nos, kics=None, types=None, n=100):
+        completed_kics = [False]*len(kics) if kics is not None else [False]
+        whole = []
+        if params is None:
+            params = map(str, col_nos)
+        else:
+            params = params
+        with open(self.filename, "r") as f:
+            for _ in range(skip_rows):
+                next(f)
+            r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
+            for i, row in enumerate(r):
+                if i == n or all(completed_kics): #TBD
+                    return whole #TBD
+                if kics is not None:
+                    if row[self.kic_col_no] in kics:
+                        completed_kics[kics.index(row[self.kic_col_no])] = True
                     else:
-                        param_arr.append(row[no])
-                if not is_dic_not_arr:
-                    whole.append(param_arr)
+                        continue
+                curr_dict = {}
+                for j, no in enumerate(col_nos):
+                    if types is not None:
+                        row[no] = types[j](row[no])
+                    curr_dict[params[j]] = row[no]
+                whole.append(curr_dict)
         return whole
 
     def filter_dic(self, dic, indexes):
@@ -94,6 +123,8 @@ class table_api(object):
             dic[key] = np.delete(dic[key], indexes)
         return dic
 
+    # filters any dictionary result with a list of values for each param, with a params_dic
+    # e.g. params_dic = {"Teff": [lambda x: x > 4]}
     def get_filtered_dic(self, info_dic, params_dic):
         good_bools = [True] * len(info_dic[info_dic.keys()[0]])
         for param in params_dic:
@@ -104,9 +135,6 @@ class table_api(object):
                 good_indexes = np.where(good_bools == False)[0]
             filter_dic(info_dic, good_indexes)
         return info_dic
-
-    def parse_fov_search_all():
-        pass
 
     def parse_fov_search_separate(self, fout_single, fout_batch):
         with open(self.filename, "r") as f, \
@@ -119,25 +147,92 @@ class table_api(object):
                 next(f)
         pass
 
-    # function, get column index by given param names, result is used as input to parse_table_col
-    def get_col_nos(params, table_file, delimiter, row_index):
-        col_nos = []
-        with open(table_file, "r") as f:
-            for _ in range(row_index):
-                next(f)
-            line = next(f)
-        field_names = [x.strip() for x in line.split(delimiter)]
-        for i, field in enumerate(field_names):
-            if field in params:
-                col_nos.append(i)
-        return col_nos
 
-def get_param_table_wrap(self, kic, params):
-    # normal table
-    table_1 = filename_periods
-    col_nos = get_col_nos(params, table_1, ",", 0)
-    params_dic = parse_table_col(col_nos, table_1, ",", 1, True, params, kics=[kic])
-    return params_dic
+class api(object):
+
+    def __init__(self, kics, source=None):
+        self.kic = kics
+        self.sources = ["q1-17", "mast_kic10", "mast_target", "mast_table", \
+                        "periodic", "nonperiodic", "kplr_target"]
+        if source not in sources:
+            logger.error("source is not defined in API")
+            return None
+
+        self.params = {}
+
+    def get_params(self, kics, params):
+        updated_params = ["Teff", "logg", "Metallicity", "Rad", "Mass" "Rho", "Dist", "Av"]
+        updated_pars, periodic_pars, mast_table_pars, \
+            mast_pars, kplr_pars, incompletes = ([] for i in range(5))
+        for param in params:
+            if param in updated_params:
+                updated_pars.append(param)
+            elif param in self.updated_dic.keys():
+                updated_pars.append(param)
+            elif param in self.mast_dic.keys():
+                mast_pars.append(param)
+            elif param in self.periodic_dic.keys():
+                periodic_pars.append(param):
+            elif param in self.mast_table_dic.keys():
+                mast_table_pars.append(param)
+            elif param in self.kplr_dic.keys():
+                kplr_pars.append(param)
+            else:
+                incompletes.append(param)
+        self.get_updated_params(kics, q117_pars)
+        self.get_periodic_or_not()
+
+    def _update_params_arr(self, old_res, new_res):
+        for i, res in enumerate(new_res):
+            old_res[i].update(res)
+        return old_res
+
+    def _format_params(self, fields_dic, params):
+        fields = []
+        types = []
+        for key in fields_dic:
+            call_name, field_type = fields_dic[key]
+            if call_name in params:
+                fields.append(key)
+                types.append(field_type)
+        return fields, types
+
+    def get_updated_params(self, kics, params):
+        self.updated_dic = updated_dic
+        col_name_arr, type_arr = self._format_params(self.updated_dic, params)
+        t = table_api(self.updated_dir, " ", 0, 0)
+        col_nos = t.get_col_nos(params, col_name_arr)
+        param_res = t.parse_table_arrs(col_nos, kics, type_arr, None)
+        self._update_params_arr(self.params, param_res)
+
+    def get_periodic_or_not(self):
+        periodic = get_kics(self.periodic_dir, ",", 1)
+        unperiodics = get_kics(self.periodic_dir, ",", 1)
+        if self.kic in periodic:
+            self.params["periodic"] = True
+        elif self.kic in unperiodics:
+            self.params["periodic"] = False
+        else:
+            self.params["periodic"] = "Unsure"
+
+    def get_periodic_params(self, params):
+        self.periodic_heads = get_nth_row(self.periodic_dir, 1, ',')
+        self.unperiodic_heads = get_nth_row(self.unperiodic_dir, 1, ',')
+        self.mast_table_heads = get_nth_row(self.mast_table_dir, 1, ',')
+        pass
+
+    def get_mast_params(self, params):
+        pass
+
+    def get_mast_table_params(self, params):
+        pass
+
+    def get_kplr_params(self, params):
+        import kplr
+        client = kplr.API()
+
+    def get_neighbours_or_not(self, filter_params):
+        return
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -147,45 +242,25 @@ def main():
     logger.info("### starting ###")
     # np.set_printoptions(linewidth=1000, precision=4)
 
-    # kics = get_kics("./data/table4.dat", " ", 0)
-    # print kics[14429]
-    # print kics[41156]
-    # print kics[67908]
-    # print kics[95041]
-    # print kics[122011]
-    # print kics[148552]
-    # print kics[175500]
-
 
     # dics = parse_table_col([0, 1, 2], filename_periods, ",", 1, True, ["KID", "Teff", "logg"], [int, float, float], kics=None, kic_col_no=0, n=5)
 
 
     ###### NOWWWW ############
 
-    t1 = ["target_name", "t_max"]
-    t2 = [{"paramName": "target_name",
-           "values": ["COMET-67P-CHURYUMOV-GER-UPDATE"]
-    }]
-    # print get_mast_params(t1, t2)
 
     # kic = "8462852"
     # import kplr
     # hey = kplr.API()
-    # h1 = hey.mast_request("data_search")
     # h2 = hey.star(int(kic))
     # print h2
     # h3 = hey.stars(kic_teff="5700..5800")
     # for h in h3:
     #     print h.kepid
 
+    t = table_api("./data/table4.dat", " ", 0, 0)
+    print t.parse_table_arrs([0, 2, 3], n=3)
 
-    dic = {
-        "target_name": "8462852",
-        "kic_radius": "0.5"
-    }
-    dics = json.dumps(dic)
-    m = mast_api()
-    print m._parse_json_output("kepler", "kepler_fov", ["Master ID"], dics, maxrec=10)
 
     make_sound(0.3, 440)
     logger.info("### everything done ###")

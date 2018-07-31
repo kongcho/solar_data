@@ -9,7 +9,7 @@ import numpy as np
 # assume all kids are unique and all data exists
 def get_existing_kics(arr1, arr2):
     list_kics = set(arr1).intersection(arr2)
-    logger.info("get_existing_kids done: %d kics" % len(list_kics))
+    logger.info("done: %d kics" % len(list_kics))
     return list_kics
 
 # checks if given kics is in file and that data exists for given columns
@@ -29,7 +29,7 @@ def get_good_existing_kics(fin, list_kids, param_arr):
                 list_params_kids.append(curr_param_kic)
                 exists_good_params = True
     list_good_kids = set(list_kics).intersection(list_params_kics)
-    logger.info("get_good_existing_kics done: %d kids" % len(list_good_kics))
+    logger.info("done: %d kids" % len(list_good_kics))
     return list_good_kics
 
 # checks if given kics is in file and data exists for all columns
@@ -60,7 +60,7 @@ def get_kics(fin, sep=',', skip_rows=0):
         reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
         for row in reader:
             all_kics.append(row[0])
-    logger.info("get_kics done: %d kics" % len(all_kics))
+    logger.info("done: %d kics" % len(all_kics))
     return all_kics
 
 # get m kics for every nth kic
@@ -81,8 +81,20 @@ def get_nth_kics(fin, n, m, sep=',', skip_rows=0):
                 if i % n == 0:
                     kics.append(row[0])
                     start = 0
-    logger.info("get_nth_kics done: %d kics" % len(kics))
+    logger.info("done: %d kics" % len(kics))
     return kics
+
+# converts nth row of file to array
+def get_nth_row(fin, n, sep=','):
+    arr = []
+    with open(fin, 'r') as f:
+        for _ in range(n-1):
+            next(f)
+        reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
+        for row in reader:
+            arr.append(row)
+    logger.info("done")
+    return arr
 
 # prompts warning if file exists
 def does_path_exists(fin):
@@ -118,7 +130,7 @@ def array_to_file(arr, fout, kids_per_file=9999, bypass_prompt=True):
                 writer.writerow([arr[i]])
             arr_i = arr_i + kids_per_file
     logger.info(str(total_kids) + " entries in " + str(np_of_files) + " files")
-    logger.info("array_to_file done")
+    logger.info("done")
     return total_kids
 
 # gets dimension of nest array
@@ -142,8 +154,8 @@ def simple_array_to_file(fout, arr):
                 for row in arr:
                     writer.writerow(row)
             else:
-                logger.error("simple_array_to_file can't support >2 dimensions")
-    logger.info("simple_array_to_file done")
+                logger.error("can't support >2 dimensions")
+    logger.info("done")
     return 0
 
 # clips array based on maximum boundaries given
