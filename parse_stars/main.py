@@ -159,9 +159,13 @@ class api(object):
             return None
 
         self.params = {}
+        self.updated_dir = filename_stellar_params
+        self.unperiodic_dir = filename_nonperiods
+        self.periodic_dir = filename_periods
+        self.mast_table_dir = filename_mast_table
 
     def get_params(self, kics, params):
-        updated_params = ["Teff", "logg", "Metallicity", "Rad", "Mass" "Rho", "Dist", "Av"]
+        updated_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av"]
         updated_pars, periodic_pars, mast_table_pars, \
             mast_pars, kplr_pars, incompletes = ([] for i in range(5))
         for param in params:
