@@ -9,7 +9,7 @@ import json
 
 class new_star(object):
 
-    def __init__(self, kic, table_file):
+    def __init__(self, kic):
         table_file = "./tests/lc_data_new.out"
         self.kic = kic
         self._get_times(kic, table_file)
@@ -24,17 +24,13 @@ class new_star(object):
         model_background(self.target, 0.2, 15)
         return 0
 
-    def _get_lcs_and_uncerts(self, table_file):
-        arr = parse_table_col(range(1, 53), table_file, ",", 1, False, [float]*52, kics=[self.kic])
+    def _get_lcs_times_uncerts(self, table_file):
+        t = table_api(table_file, delimiter=",", skip_rows=1, kic_col_no=0)
+        arr = t.parse_table_arrs(range(0, 108), kics=[self.kic], types=[float]*52)
         self.lcs = arr[:52]
         self.flux_uncert = arr[52:56]
         self.target_uncert = arr[56:108]
-        return 0
-
-    def _get_times(self, table_file):
-        with open(table_file) as f:
-            fields = f.readline().strip().split(",")
-        self.times = fields[1:53]
+        self.times = t.get_nth_row(1)[1:53]
         return 0
 
 
@@ -45,6 +41,17 @@ class table_api(object):
         self.delimiter = delimiter
         self.skip_rows = skip_rows
         self.kic_col_no = kic_col_no
+
+    # converts nth row of file to array
+    def get_nth_row(self, n):
+        arr = []
+        with open(self.filename, 'r') as f:
+            for _ in range(n-1):
+                next(f)
+            reader = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
+            for row in reader:
+                arr.append(row)
+        return arr
 
     # function, gets columns indexes of given param names to parse table by column number
     def get_col_nos(self, params_want, field_names):
@@ -158,7 +165,7 @@ class api(object):
             logger.error("source is not defined in API")
             return None
 
-        self.params = {}
+        self.res = [{} for _ in kics]
         self.updated_dir = filename_stellar_params
         self.unperiodic_dir = filename_nonperiods
         self.periodic_dir = filename_periods
@@ -176,7 +183,7 @@ class api(object):
             elif param in self.mast_dic.keys():
                 mast_pars.append(param)
             elif param in self.periodic_dic.keys():
-                periodic_pars.append(param):
+                periodic_pars.append(param)
             elif param in self.mast_table_dic.keys():
                 mast_table_pars.append(param)
             elif param in self.kplr_dic.keys():
@@ -194,10 +201,11 @@ class api(object):
     def _format_params(self, fields_dic, params):
         fields = []
         types = []
-        for key in fields_dic:
-            call_name, field_type = fields_dic[key]
-            if call_name in params:
-                fields.append(key)
+        all_keys = fields_dic.keys()
+        for param in params:
+            if param in all_keys:
+                call_name, field_type = fields_dic[param]
+                fields.append(call_name)
                 types.append(field_type)
         return fields, types
 
@@ -225,8 +233,16 @@ class api(object):
         self.mast_table_heads = get_nth_row(self.mast_table_dir, 1, ',')
         pass
 
-    def get_mast_params(self, params):
-        pass
+    def get_mast_params(self, kics, params):
+        basic_dic = {
+            "kic_kepler_id": "8462852",
+        }
+        params_str = format_arr(params, ",")
+        m = mast_api()
+        hey = m.parse_target_params(basic_dic, ["kic_kepler_id", "kic_teff"])
+        # hey = m.parse_target_params(basic_dic, params_str)
+        print hey
+        print hey.text
 
     def get_mast_table_params(self, params):
         pass
@@ -234,6 +250,7 @@ class api(object):
     def get_kplr_params(self, params):
         import kplr
         client = kplr.API()
+        
 
     def get_neighbours_or_not(self, filter_params):
         return
@@ -262,8 +279,16 @@ def main():
     # for h in h3:
     #     print h.kepid
 
-    t = table_api("./data/table4.dat", " ", 0, 0)
-    print t.parse_table_arrs([0, 2, 3], n=3)
+    basic_dic = {
+        # "ra": "12 46 11.086"
+        # "kic_kepler_id": "8462852"
+    }
+    m = mast_api()
+    hey = m._get_mission_params("kepler", "kepler_fov", basic_dic, maxrec=1)
+    # hey = m.parse_target_params(basic_dic, ["kic_kepler_id", "kic_teff"])
+    # hey = m.parse_target_params(basic_dic, params_str)
+    print hey.text
+    # print (hey.json())
 
 
     make_sound(0.3, 440)

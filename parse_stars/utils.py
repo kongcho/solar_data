@@ -84,18 +84,6 @@ def get_nth_kics(fin, n, m, sep=',', skip_rows=0):
     logger.info("done: %d kics" % len(kics))
     return kics
 
-# converts nth row of file to array
-def get_nth_row(fin, n, sep=','):
-    arr = []
-    with open(fin, 'r') as f:
-        for _ in range(n-1):
-            next(f)
-        reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
-        for row in reader:
-            arr.append(row)
-    logger.info("done")
-    return arr
-
 # prompts warning if file exists
 def does_path_exists(fin):
     if os.path.exists(fin):

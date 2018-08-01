@@ -68,7 +68,11 @@ class mast_api(object):
         r = self._get_mission_params(mission, table, params, form="JSON", maxrec=maxrec, **kwargs)
         if r is None:
             return None
-        json_arr = r.json()
+        try:
+            json_arr = r.json()
+        except Exception as e:
+            logger.error("Error: %s" % e.message)
+            return None
         for json_obj in json_arr:
             new_dict = {}
             for key in output_params:
@@ -78,7 +82,7 @@ class mast_api(object):
         return new_arr
 
     def parse_target_params(self, params, output_params, **kwargs):
-        return self._parse_json_output("kepler", "kepler_fov", params, output_params, **kwargs)
+        return self._parse_json_output("kepler", "kic10", params, output_params, **kwargs)
 
     def get_caom_params(self, columns, filters, form="json", page_size=400000, **kwargs):
         url = self.base_url.format("mast") + "api/v0/invoke"
