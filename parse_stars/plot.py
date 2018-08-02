@@ -247,9 +247,9 @@ def print_lc_improved(kics, fouts):
             if target == 1:
                 continue
             if is_first:
-                names1 = map(str, target.times) + build_arr_n_names("est_unc_old", 4) + \
+                names1 = ["KIC"] + map(str, target.times) + build_arr_n_names("est_unc_old", 4) + \
                          build_arr_n_names("mod_unc_old", 52)
-                names2 = map(str, target.times) + build_arr_n_names("uncert_new", 4) + \
+                names2 = ["KIC"] + map(str, target.times) + build_arr_n_names("uncert_new", 4) + \
                          build_arr_n_names("mod_unc_new", 52)
                 w0.writerow(names0)
                 w1.writerow(names1)

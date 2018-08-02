@@ -1,26 +1,130 @@
 from utils import does_path_exists
 from settings import setup_logging, filename_stellar_params
-
 logger = setup_logging()
+
+import csv
+
+class table_api(object):
+
+    def __init__(self, table_file, delimiter=",", skip_rows=0, kic_col_no=None):
+        self.filename = table_file
+        self.delimiter = delimiter
+        self.skip_rows = skip_rows
+        self.kic_col_no = kic_col_no
+
+    # converts nth row of file to array
+    def get_nth_row(self, n):
+        with open(self.filename, 'r') as f:
+            for _ in range(n-1):
+                next(f)
+            reader = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
+            arr = next(reader)
+        return arr
+
+    # function, gets columns indexes of given param names to parse table by column number
+    def get_col_nos(self, params, field_names):
+        col_nos = []
+        for i, field in enumerate(field_names):
+            if field in params:
+                col_nos.append(i)
+        return col_nos
+
+    def get_col_nos_table(self, row_index, params):
+        with open(self.filename, "r") as f:
+            for _ in range(row_index):
+                next(f)
+            line = next(f)
+        field_names = [x.strip() for x in line.split(self.delimiter)]
+        return self.get_col_nos(params, field_names)
+
+    def parse_table_arrs(self, col_nos, kics=None, types=None):
+        completed_kics = [False]*len(kics) if kics is not None else [False]
+        whole = []
+        if self.kic_col_no is not None:
+            try:
+                col_nos.remove(self.kic_col_no)
+            except:
+                pass
+        with open(self.filename, "r") as f:
+            for _ in range(self.skip_rows):
+                next(f)
+            r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
+            for i, row in enumerate(r):
+                if all(completed_kics):
+                    return whole
+                if kics is not None:
+                    if row[self.kic_col_no] in kics:
+                        completed_kics[kics.index(row[self.kic_col_no])] = True
+                    else:
+                        continue
+                param_arr = []
+                for j, no in enumerate(col_nos):
+                    if types is not None:
+                        row[no] = types[j](row[no])
+                    param_arr.append(row[no])
+                whole.append(param_arr)
+        return whole
+
+    # function, can parse through kepler_fov_search* and table_periodic tables
+    def parse_table_dicts(self, col_nos, kics=None, types=None):
+        completed_kics = [False]*len(kics) if kics is not None else [False]
+        whole = []
+        if params is None:
+            params = map(str, col_nos)
+        else:
+            params = params
+        with open(self.filename, "r") as f:
+            for _ in range(skip_rows):
+                next(f)
+            r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
+            for i, row in enumerate(r):
+                if all(completed_kics):
+                    return whole
+                if kics is not None:
+                    if row[self.kic_col_no] in kics:
+                        completed_kics[kics.index(row[self.kic_col_no])] = True
+                    else:
+                        continue
+                curr_dict = {}
+                for j, no in enumerate(col_nos):
+                    if types is not None:
+                        try:
+                            row[no] = types[j](row[no])
+                        except Exception as e:
+                            pass
+                    curr_dict[params[j]] = row[no]
+                whole.append(curr_dict)
+        return whole
+
+    def filter_dic(self, dic, indexes):
+        for key in dic:
+            dic[key] = np.delete(dic[key], indexes)
+        return dic
+
+    # filters any dictionary result with a list of values for each param, with a params_dic
+    # e.g. params_dic = {"Teff": [lambda x: x > 4]}
+    def get_filtered_dic(self, info_dic, params_dic):
+        good_bools = [True] * len(info_dic[info_dic.keys()[0]])
+        for param in params_dic:
+            good_bools = [True] * np.count_nonzero(good_bools)
+            param_arr = np.array(info_dic[param])
+            for bool_f in params_dic[param]:
+                good_bools = np.logical_and(good_bools, bool_f(param_arr))
+                good_indexes = np.where(good_bools == False)[0]
+            filter_dic(info_dic, good_indexes)
+        return info_dic
+
+
+### MAST TABLE PARSING
 
 
 """
-different tables
-- filename_stellar_params ie list of 197k stars
-  - "good kepler stars"
-  - no labels tho :'(
-  - " ", skip 0
-- table_periodic ie is periodic or not
-  - has labels
-  - ",", skip 1
 - kepler_fov_search
   - has a lotttt of info shit
   - ugly af
   - can tell u if u have bright neighbours or not
   - ",", skip 2
 """
-
-
 
 # prints one dict of kid, kepmag, angsep to csv file
 def dict_to_file(fout, dicts, keys=None, bypass_prompt=True):
@@ -64,61 +168,8 @@ def element_is_not_in_list(arr, n):
             return False
     return True
 
-# removes stars from list with bright neighbours, and removes duplicates
-# assumes that list of neighbour stars follows each target stars, and
-#   list of input stars has same order and is same as processed stars
-def remove_bright_neighbours_together(folder, filename_out, difference_max=2.0, bypass_prompt=True):
-    all_kids = []
-    kepmag_col_no = 1
-    curr_id = -1
-    count = 0
-    # filename = parsed_kids_filename
-
-    if not bypass_prompt and does_path_exists(filename):
-        return 1
-
-    input_files = sorted([filename for filename in os.listdir(folder) \
-                          if filename.startswith(kepmag_file_prefix)])
-
-    with open(filename_out, 'w') as output_f:
-        for input_files_i in range(len(input_files)):
-            with open(input_files[input_files_i]) as input_f:
-                for line in input_f:
-                    curr_line = line.strip()
-                    if curr_line[0:10] == "Input line": #id line
-                        if curr_line[10:13] == " 1:": # under input 1 is labels
-                            fieldnames = input_f.readline().strip().split(',')
-                            for fields_i in range(len(fieldnames)):
-                                if fieldnames[fields_i] == "Kepler_ID":
-                                    kid_col_no = fields_i
-                                if fieldnames[fields_i] == "kepmag":
-                                    kepmag_col_no = fields_i
-                            input_f.readline() #types, useless line
-                        curr_data = input_f.readline().strip().split(',')
-                        curr_kid = int(curr_data[kid_col_no])
-                        curr_kepmag = float(curr_data[kepmag_col_no])
-                        if element_is_not_in_list(all_kids, curr_kid):
-                            all_kids.append(curr_kid)
-                            output_f.write(str(curr_kid) + "\n")
-                            count += 1
-                    else:
-                        test_data = curr_line.split(',')
-                        test_kid = int(test_data[kid_col_no])
-                        test_kepmag = test_data[kepmag_col_no]
-                        if test_kepmag == "":
-                            continue
-                        elif abs(curr_kepmag - float(test_kepmag)) <= difference_max:
-                            if element_is_not_in_list(all_kids, test_kid):
-                                all_kids.append(test_kid)
-                                output_f.write(str(test_kid) + "\n")
-                                count += 1
-    logger.info("printed " + str(count) + " kids")
-    logger.info("remove_bright_neighbours_together done")
-    return 0
-
-# doesn't remove duplicates
 # outputs separate files for stars with no neighbours and with neighbours
-def remove_bright_neighbours_separate(folder, fout_prefix, difference_max=2.0):
+def remove_bright_neighbours(folder, fout_prefix, difference_max=2.0):
     single_kids = []
     batch_kids = []
     curr_dict = {}
@@ -252,12 +303,6 @@ def get_table_params(kics, params, fout, table_file=filename_stellar_params):
         logger.error("Error: not all kics are processed")
     logger.debug("get_table_params done")
     return 0
-
-# TODO: function
-def get_mast_params(target, params):
-    data = target.mast_request("kepler", "Kepler_ID")
-    print(data)
-    return
 
 # TODO: function
 def is_faint_table(target, min_kepmag=15, table_file=filename_stellar_params):

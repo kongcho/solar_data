@@ -1,6 +1,7 @@
 from settings import setup_logging
 logger = setup_logging()
 
+import kplr
 import requests
 import json
 
@@ -43,29 +44,27 @@ class mast_api(object):
             logger.error("url doesn't exist to make mast request")
             return 1
 
-    def _get_mission_params(self, mission, table=None, params={}, output_params="", \
-                            form="JSON", maxrec=100000, **kwargs):
+    def get_mission_params(self, mission, table=None, output_params="", \
+                            form="JSON", maxrec=100000, **params):
         if self._check_url_exists(mission, table, form) == 1:
             return None
         param_dict = {"action": "Search",
-                      "showquery": "on",
                       "max_records": maxrec,
                       "outputformat": form,
-                      "params": params
         }
+        param_dict.update(params)
         if output_params is not None:
             param_dict.update({"selectedColumnsCsv": output_params})
-        param_dict.update(kwargs)
         r = session(self.url).get(params=param_dict)
         if r.status_code == 200:
             logger.info("sent MAST request")
             return r
         return None
 
-    def _parse_json_output(self, mission, table=None, params={}, output_params=[], \
-                           maxrec=100000, **kwargs):
+    def parse_json_output(self, mission, table=None, output_params=None, \
+                           maxrec=100000, **params):
         new_arr = []
-        r = self._get_mission_params(mission, table, params, form="JSON", maxrec=maxrec, **kwargs)
+        r = self.get_mission_params(mission, table, form="JSON", maxrec=maxrec, **params)
         if r is None:
             return None
         try:
@@ -73,16 +72,16 @@ class mast_api(object):
         except Exception as e:
             logger.error("Error: %s" % e.message)
             return None
-        for json_obj in json_arr:
-            new_dict = {}
-            for key in output_params:
-                if key in json_obj:
-                    new_dict[key] = json_obj[key]
-            new_arr.append(new_dict)
+        if output_params is None:
+            new_arr = json_arr
+        else:
+            for json_obj in json_arr:
+                new_dict = {}
+                for key in output_params:
+                    if key in json_obj:
+                        new_dict[key] = json_obj[key]
+                new_arr.append(new_dict)
         return new_arr
-
-    def parse_target_params(self, params, output_params, **kwargs):
-        return self._parse_json_output("kepler", "kic10", params, output_params, **kwargs)
 
     def get_caom_params(self, columns, filters, form="json", page_size=400000, **kwargs):
         url = self.base_url.format("mast") + "api/v0/invoke"
