@@ -29,6 +29,8 @@ class api(object):
                 updated_pars.append(param)
             elif param in settings.updated_dic.keys():
                 updated_pars.append(param)
+            elif param in settings.periodic_dic.keys():
+                periodic_pars.append(param)
             elif param in settings.mast_params:
                 mast_pars.append(param)
 
@@ -43,6 +45,8 @@ class api(object):
         if "lcs_img" in params:
             self._update_params(new_params, self.get_lcs_imgs(kics))
         self._update_params(new_params, self.get_updated_params(kics, updated_pars))
+        self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
+        self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_mast_params(kics, mast_pars))
         return new_params
 
@@ -70,6 +74,24 @@ class api(object):
         param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
         return param_res
 
+    def get_periodic_params(self, kics, params):
+        param_arr = [settings.periodic_dic[par][0] for par in params \
+                     if par in settings.periodic_dic.keys()]
+        col_name_arr, type_arr = self._format_params(settings.periodic_dic, params)
+        t = table_api(self.updated_dir, ",", 1, 0)
+        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr)
+        return param_res
+
+    def get_nonperiodic_params(self, kics, params):
+        param_arr = [settings.nonperiodic_dic[par][0] for par in params \
+                     if par in settings.nonperiodic_dic.keys()]
+        col_name_arr, type_arr = self._format_params(settings.nonperiodic_dic, params)
+        t = table_api(self.updated_dir, ",", 1, 0)
+        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        param_res = t.parse_table_arrs(col_nos, kics, type_arr)
+        return param_res
+
     def get_periodic_or_not(self, kics):
         periodic = get_kics(self.periodic_dir, ",", 1)
         unperiodics = get_kics(self.nonperiodic_dir, ",", 1)
@@ -84,22 +106,6 @@ class api(object):
                 curr_params["periodic"] = "Unsure"
             reses.append(curr_params)
         return reses
-
-    def get_periodic_params(self, kics, params):
-        param_arr = [settings.periodic_dic[par][0] for par in params]
-        col_name_arr, type_arr = self._format_params(settings.periodic_dic, params)
-        t = table_api(self.updated_dir, ",", 1, 0)
-        col_nos = t.get_col_nos(param_arr, col_name_arr)
-        param_res = t.parse_table_dicts(col_nos, kics, type_arr)
-        return param_res
-
-    def get_nonperiodic_params(self, kics, params):
-        param_arr = [settings.nonperiodic_dic[par][0] for par in params]
-        col_name_arr, type_arr = self._format_params(settings.nonperiodic_dic, params)
-        t = table_api(self.updated_dir, ",", 1, 0)
-        col_nos = t.get_col_nos(param_arr, col_name_arr)
-        param_res = t.parse_table_arrs(col_nos, kics, type_arr)
-        return param_res
 
     def get_mast_params(self, kics, params):
         client = kplr.API()

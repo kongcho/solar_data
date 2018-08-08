@@ -19,8 +19,10 @@ def main():
     # base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
     #                "periodic"]
     # param_dic = {"neighbours": [lambda x: x != []]}
-    # kics = ["757280", "757450"]
-    # n = new_stars(kics)
+    kics = ["757280", "757450"]
+    n = new_stars(kics)
+    n.get_basic_params(0.15)
+    print n.res
 
     # run_photometry("893233")
 

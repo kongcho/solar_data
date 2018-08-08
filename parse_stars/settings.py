@@ -116,16 +116,16 @@ updated_dic = {
 
 periodic_dic = {
     "KID": ("KID", int),
-    "Teff": ("Teff", int),
+    "Teff": ("Teff", int), # K, Dressing & Charbonneau
     "logg": ("logg", float),
     "Mass": ("Mass", float),
-    "Prot": ("Prot", float),
-    "Prot_err": ("Prot_err", float),
-    "Rper": ("Rper", float),
-    "LPH": ("LPH", float),
-    "w": ("w", float),
+    "prot": ("Prot", float), # Period, days
+    "Prot_err": ("Prot_err", float), #Period error
+    "rper": ("Rper", float), #Average amplitude of variability within one period, ppm
+    "LPH": ("LPH", float), # Local peak height
+    "w": ("w", float), # Assigned weight
     "DC": ("DC", int),
-    "Flag": ("Flag", str)
+    "Flag": ("Flag", str) # Corrections/smoothing
 }
 
 nonperiodic_dic = {
@@ -133,7 +133,7 @@ nonperiodic_dic = {
     "Teff": ("Teff", int),
     "logg": ("logg", float),
     "Mass": ("Mass", float),
-    "Prot": ("Prot", float),
+    "prot": ("Prot", float),
     "Prot_err": ("Prot_err", float),
     "LPH": ("LPH", float),
     "w": ("w", float),

@@ -33,7 +33,7 @@ class new_stars(object):
 
     def get_basic_params(self, neighbour_arcsep=0.15):
         base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
-                       "periodic", "neighbours"]
+                       "prot", "rper", "periodic", "neighbours"]
         self.get_params(base_params, radius=neighbour_arcsep)
         return 0
 
