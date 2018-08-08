@@ -21,7 +21,7 @@ class api(object):
 
     def get_params(self, kics, params, **neighbour_filters):
         new_params = [{} for _ in kics]
-        updated_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av"]
+        updated_params = ["teff", "logg", "metallicity", "rad", "mass", "rho", "dist", "av"]
         updated_pars, periodic_pars, mast_pars, mast_table_pars = ([] for _ in range(4))
 
         for param in params:
@@ -29,7 +29,7 @@ class api(object):
                 updated_pars.append(param)
             elif param in settings.updated_dic.keys():
                 updated_pars.append(param)
-            else:
+            elif param in settings.mast_params:
                 mast_pars.append(param)
 
         if "periodic" in params:
@@ -63,10 +63,11 @@ class api(object):
         return fields, types
 
     def get_updated_params(self, kics, params):
+        param_arr = [settings.updated_dic[par][0] for par in params]
         col_name_arr, type_arr = self._format_params(settings.updated_dic, params)
         t = table_api(self.updated_dir, " ", 0, 0)
-        col_nos = t.get_col_nos(params, col_name_arr)
-        param_res = t.parse_table_arrs(col_nos, kics, type_arr)
+        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
         return param_res
 
     def get_periodic_or_not(self, kics):
@@ -85,16 +86,18 @@ class api(object):
         return reses
 
     def get_periodic_params(self, kics, params):
+        param_arr = [settings.periodic_dic[par][0] for par in params]
         col_name_arr, type_arr = self._format_params(settings.periodic_dic, params)
         t = table_api(self.updated_dir, ",", 1, 0)
-        col_nos = t.get_col_nos(params, col_name_arr)
-        param_res = t.parse_table_arrs(col_nos, kics, type_arr)
+        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr)
         return param_res
 
     def get_nonperiodic_params(self, kics, params):
+        param_arr = [settings.nonperiodic_dic[par][0] for par in params]
         col_name_arr, type_arr = self._format_params(settings.nonperiodic_dic, params)
         t = table_api(self.updated_dir, ",", 1, 0)
-        col_nos = t.get_col_nos(params, col_name_arr)
+        col_nos = t.get_col_nos(param_arr, col_name_arr)
         param_res = t.parse_table_arrs(col_nos, kics, type_arr)
         return param_res
 
@@ -121,7 +124,8 @@ class api(object):
             m = mast_api()
             res = m.parse_json_output("kepler", "kic10", ["Kepler ID"], target=kic, **filter_params)
             for i in res:
-                neighbours.append(i["Kepler ID"])
+                if i["Kepler ID"] != kic:
+                    neighbours.append(i["Kepler ID"])
             curr_params["neighbours"] = neighbours
             reses.append(curr_params)
         return reses

@@ -87,7 +87,7 @@ def setup_main_logging():
 
 updated_dic = {
     "kic": ("KIC", int),
-    "Teff": ("Teff", int), # Effective temperature; output
+    "teff": ("Teff", int), # Effective temperature; output
     "E_Teff": ("E_Teff", int), # Upper 1{sigma} confidence interval
     "e_Teff": ("e_Teff", int), # Lower 1{sigma} confidence interval
     "logg": ("log(g)", float), # Log surface gravity; output
@@ -143,3 +143,4 @@ nonperiodic_dic = {
 mast_table_dic = {
 }
 
+mast_params = []

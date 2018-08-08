@@ -15,16 +15,18 @@ def main():
     logger.info("### starting ###")
     # np.set_printoptions(linewidth=1000, precision=4)
 
-    # kics = ["757280", "757450"]
-    # n = new_stars(kics)
-    # print n.get_basic_params(0.15)
-    # print n.get_other_params("lc_new")
-    # print n.res
+    base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
+                   "periodic"]
 
-    all_kics = get_kics("./kics.out")
-    calc_kics = get_kics("/data/results/lc_data_new.out")
-    non_kics = list(set(all_kics) ^ set(calc_kics))
-    simple_array_to_file("./failed_kics.txt", non_kics)
+    param_dic = {"neighbours": [lambda x: x != []]}
+
+    kics = ["757280", "757450"]
+    n = new_stars(kics)
+    print n.get_basic_params(0.15)
+    print n.get_params("lc_new")
+    print n.filter_params(kics, param_dic)
+    print n.res
+
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

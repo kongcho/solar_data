@@ -66,7 +66,7 @@ class table_api(object):
         return whole
 
     # function, can parse through kepler_fov_search* and table_periodic tables
-    def parse_table_dicts(self, col_nos, kics=None, types=None):
+    def parse_table_dicts(self, col_nos, kics=None, types=None, params=None):
         completed_kics = [False]*len(kics) if kics is not None else [False]
         whole = []
         if params is None:
@@ -74,7 +74,7 @@ class table_api(object):
         else:
             params = params
         with open(self.filename, "r") as f:
-            for _ in range(skip_rows):
+            for _ in range(self.skip_rows):
                 next(f)
             r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             for i, row in enumerate(r):
