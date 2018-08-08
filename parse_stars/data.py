@@ -37,13 +37,25 @@ class new_stars(object):
         self.get_params(base_params, radius=neighbour_arcsep)
         return 0
 
-    def get_neighbour_res(self):
-        completed = self.kics
+    def get_neighbour_res(self, params=[]):
+        completed = []
+        completed[:] = self.kics
+        completed_dics = []
+        completed_dics[:] = self.res
         for i, star in enumerate(self.res):
-            pass
-        for neighbour in neighbours:
-            if neighbour not in self.kics:
-        pass
+            star["neighbour_stars"] = []
+            if star["neighbour"]:
+                for neighbour in star["neighbour"]:
+                    if neighbour not in completed:
+                        new_star = new_star(neighbour)
+                        new_star.get_params(params)
+                        completed.append(neighbour)
+                        completed_dics.append(new_star["params"])
+                    else:
+                        j = completed.find(neighbour)
+                        new_star = completed_dics[j]
+                    star["neighbour_stars"].append(new_star)
+        return 0
 
     def filter_params(self, kics, param_dic):
         res_kics = []

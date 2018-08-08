@@ -45,7 +45,7 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
 
     try:
         target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
-                              remove_excess, plot_flag, plot_window)
+                                  remove_excess, plot_flag, plot_window)
     except Exception as e:
         logger.info("unsuccessful: %s" % target.kic)
         logger.error(e, exc_info=True)

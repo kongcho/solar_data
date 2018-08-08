@@ -3,11 +3,13 @@ from utils import *
 from data import new_stars
 import os
 import numpy as np
-
+import csv
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
     return 0
+
+
 
 def main():
     logger.info("### starting ###")
@@ -22,6 +24,7 @@ def main():
     all_kics = get_kics("./kics.out")
     calc_kics = get_kics("/data/results/lc_data_new.out")
     non_kics = list(set(all_kics) ^ set(calc_kics))
+    simple_array_to_file("./failed_kics.txt", non_kics)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")
