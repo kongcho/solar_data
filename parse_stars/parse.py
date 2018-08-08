@@ -285,7 +285,6 @@ def get_table_params(kics, params, fout, table_file=filename_stellar_params):
                     if fieldname == param:
                         params_list.append((param, f_i))
             if len(params_list) != len(params):
-                print(params)
                 logger.error("Error: not all params found")
                 return 1
         else:

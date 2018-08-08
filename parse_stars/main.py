@@ -1,5 +1,6 @@
 from settings import *
 from utils import *
+from aperture import run_photometry
 from data import new_stars
 import os
 import numpy as np
@@ -15,18 +16,13 @@ def main():
     logger.info("### starting ###")
     # np.set_printoptions(linewidth=1000, precision=4)
 
-    base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
-                   "periodic"]
+    # base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
+    #                "periodic"]
+    # param_dic = {"neighbours": [lambda x: x != []]}
+    # kics = ["757280", "757450"]
+    # n = new_stars(kics)
 
-    param_dic = {"neighbours": [lambda x: x != []]}
-
-    kics = ["757280", "757450"]
-    n = new_stars(kics)
-    print n.get_basic_params(0.15)
-    print n.get_params("lc_new")
-    print n.filter_params(kics, param_dic)
-    print n.res
-
+    # run_photometry("893233")
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")
