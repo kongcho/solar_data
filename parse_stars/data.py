@@ -37,3 +37,28 @@ class new_stars(object):
         self.get_params(base_params, radius=neighbour_arcsep)
         return 0
 
+    def get_neighbour_res(self):
+        completed = self.kics
+        for i, star in enumerate(self.res):
+            pass
+        for neighbour in neighbours:
+            if neighbour not in self.kics:
+        pass
+
+    def filter_params(self, kics, param_dic):
+        res_kics = []
+        res_kics_idxs = []
+        res_kics_bools = [True] * len(kics)
+        for i, kic in enumerate(self.kics):
+            if kic in kics:
+                res_kics_idxs.append(i)
+                res_kics.append(kic)
+        for i, kic in enumerate(res_kics):
+            kic_params = self.params[i]
+            for param in param_dic:
+                for boolf in param_dic[param]:
+                    if res_kics_bools[i] and not boolf(kic_params[param]):
+                        res_kics_bools[i] = False
+        res = [res_kics[i] for i in range(len(res_kics)) if res_kics_idxs[i]]
+        return res
+
