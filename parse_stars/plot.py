@@ -225,17 +225,18 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
 
 
 # function, prints aperture, calculated light curves before and after improvement to 3 different text files
-def print_lc_improved(kics, fouts):
+def print_lc_improved(kics, fouts, print_headers=True):
     fout0, fout1, fout2 = fouts
     successes = 0
     is_first = True
 
-    names0 = ["KIC"] + build_arr_n_names("postcard_center", 2) + \
-             build_arr_n_names("aperture_center", 2) + build_arr_n_names("img", 900)
-    names1 = ["KIC"] + build_arr_n_names("flux_old", 52) + build_arr_n_names("est_unc_old", 4) + \
-             build_arr_n_names("mod_unc_old", 52)
-    names2 = ["KIC"] + build_arr_n_names("flux_new", 52) + build_arr_n_names("est_unc_new", 4) + \
-             build_arr_n_names("mod_unc_new", 52)
+    if print_headers:
+        names0 = ["KIC"] + build_arr_n_names("postcard_center", 2) + \
+                 build_arr_n_names("aperture_center", 2) + build_arr_n_names("img", 900)
+        names1 = ["KIC"] + build_arr_n_names("flux_old", 52) + \
+                 build_arr_n_names("est_unc_old", 4) + build_arr_n_names("mod_unc_old", 52)
+        names2 = ["KIC"] + build_arr_n_names("flux_new", 52) + \
+                 build_arr_n_names("est_unc_new", 4) + build_arr_n_names("mod_unc_new", 52)
 
     with open(fout0, "ab") as f0, open(fout1, "ab") as f1, open(fout2, "ab") as f2:
         w0 = csv.writer(f0, delimiter=',', lineterminator='\n')
@@ -246,7 +247,7 @@ def print_lc_improved(kics, fouts):
             target = run_photometry(kic)
             if target == 1:
                 continue
-            if is_first:
+            if print_headers and is_first:
                 names1 = ["KIC"] + map(str, target.times) + build_arr_n_names("est_unc_old", 4) + \
                          build_arr_n_names("mod_unc_old", 52)
                 names2 = ["KIC"] + map(str, target.times) + build_arr_n_names("uncert_new", 4) + \

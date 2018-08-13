@@ -45,6 +45,9 @@ class table_api(object):
                 col_nos.remove(self.kic_col_no)
             except:
                 pass
+            else:
+                if types is not None:
+                    del types[self.kic_col_no]
         with open(self.filename, "r") as f:
             for _ in range(self.skip_rows):
                 next(f)
@@ -60,7 +63,10 @@ class table_api(object):
                 param_arr = []
                 for j, no in enumerate(col_nos):
                     if types is not None:
-                        row[no] = types[j](row[no])
+                        try:
+                            row[no] = types[j](row[no])
+                        except Exception as e:
+                            pass
                     param_arr.append(row[no])
                 whole.append(param_arr)
         return whole

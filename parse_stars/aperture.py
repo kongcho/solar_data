@@ -9,6 +9,7 @@ import lightkurve as lk
 os.sys.path.append(f3_location)
 from f3 import photometry
 
+import matplotlib.pyplot as plt
 
 # helper function for improve_aperture, pads any image to desired shape with pad_val
 def pad_img(img, desired_shape, positions, pad_val=0):
@@ -56,16 +57,24 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
 
-    img = np.sum(((target.targets == 1)*target.postcard + (target.targets == 1)*100000)\
-                 [:,ii-image_region:ii+image_region, jj-image_region:jj+image_region], axis=0)
+    sides = []
+    if ii-image_region < 0:
+        sides.append("Top")
+    if jj-image_region < 0:
+        sides.append("Left")
 
-    if (img.shape != (image_region*2, image_region*2)):
-        sides = []
-        if ii - image_region < 0:
-            sides.append("Top")
-        if jj - image_region < 0:
-            sides.append("Left")
-        img = pad_img_wrap(img, (image_region*2, image_region*2), sides)
+    ymin = max(ii-image_region, 0)
+    ymax = min(ii+image_region, target.postcard.shape[1])
+    xmin = max(jj-image_region, 0)
+    xmax = min(jj+image_region, target.postcard.shape[2])
+
+    targets_small = target.targets[ymin:ymax, xmin:xmax]
+    targets_pad = pad_img_wrap(targets_small, (image_region*2, image_region*2), sides, 0.0)
+
+    int_small = target.integrated_postcard[ymin:ymax, xmin:xmax]
+    int_pad = pad_img_wrap(int_small, (image_region*2, image_region*2), sides, 0.0)
+
+    img = (targets_pad == 1)*(int_pad + target.postcard.shape[0]*100000)
 
     setattr(photometry.star, 'img', img)
 
@@ -395,6 +404,9 @@ def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
                tar.params['Channel_2'], tar.params['Channel_3']]
+    for chan in channel:
+        if chan is not None:
+            first_channel = chan
     kepprf = lk.KeplerPRF(channel=channel[0], shape=(image_region*2, image_region*2), \
                           column=image_region, row=image_region)
     prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
