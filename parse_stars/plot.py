@@ -1,4 +1,4 @@
-from utils import get_sub_kwargs, clip_array, build_arr_n_names
+from utils import get_sub_kwargs, clip_array, build_arr_n_names, format_arr
 from aperture import run_photometry, improve_aperture, get_aperture_center, \
     calculate_better_aperture, model_background, make_background_mask
 from settings import setup_logging, mpl_setup
@@ -257,9 +257,16 @@ def print_lc_improved(kics, fouts, print_headers=True):
                 w2.writerow(names2)
                 is_first = False
 
+            targ = target.target
+            col = [targ.params['Column_0'], targ.params['Column_1'],
+                   targ.params['Column_2'], targ.params['Column_3']]
+            row = [targ.params['Row_0'], targ.params['Row_1'],
+                   targ.params['Row_2'], targ.params['Row_3']]
+            center = [format_arr(row, ","), format_arr(col, ",")]
+
             target.model_uncert()
             calculate_better_aperture(target, 0.001, 2, 0.7, 15)
-            arr0 = np.concatenate([np.asarray([kic]), target.center, get_aperture_center(target), \
+            arr0 = np.concatenate([np.asarray([kic]), center, get_aperture_center(target), \
                                    target.img.flatten()])
             arr1 = np.concatenate([np.asarray([kic]), target.obs_flux, \
                                    target.flux_uncert, target.target_uncert])

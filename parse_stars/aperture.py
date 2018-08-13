@@ -407,7 +407,8 @@ def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     for chan in channel:
         if chan is not None:
             first_channel = chan
-    kepprf = lk.KeplerPRF(channel=channel[0], shape=(image_region*2, image_region*2), \
+            break
+    kepprf = lk.KeplerPRF(channel=first_channel, shape=(image_region*2, image_region*2), \
                           column=image_region, row=image_region)
     prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
                  scale_row=1, scale_col=1, rotation_angle=0)
