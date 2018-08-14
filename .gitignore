@@ -7,9 +7,9 @@ parse_stars/tests
 parse_stars/ffidata
 parse_stars/venv
 
+.ipynb_checkpoints/
+
 *\.tar\.gz
 *\.zip
 *\.rar
-
-.ipynb_checkpoints/
-make_model.ipynb
+*\.log
