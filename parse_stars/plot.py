@@ -225,14 +225,14 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
 
 
 # function, prints aperture, calculated light curves before and after improvement to 3 different text files
-def print_lc_improved(kics, fouts, print_headers=True):
+def print_lc_improved(kics, fouts, min_distance=20, print_headers=True):
     fout0, fout1, fout2 = fouts
     successes = 0
     is_first = True
 
     if print_headers:
         names0 = ["KIC"] + build_arr_n_names("postcard_center", 2) + \
-                 build_arr_n_names("aperture_center", 2) + build_arr_n_names("img", 900)
+                 build_arr_n_names("aperture_center", 2) + build_arr_n_names("img", 900) + ["Note"]
         names1 = ["KIC"] + build_arr_n_names("flux_old", 52) + \
                  build_arr_n_names("est_unc_old", 4) + build_arr_n_names("mod_unc_old", 52)
         names2 = ["KIC"] + build_arr_n_names("flux_new", 52) + \
@@ -262,12 +262,16 @@ def print_lc_improved(kics, fouts, print_headers=True):
                    targ.params['Column_2'], targ.params['Column_3']]
             row = [targ.params['Row_0'], targ.params['Row_1'],
                    targ.params['Row_2'], targ.params['Row_3']]
-            center = [format_arr(row, ","), format_arr(col, ",")]
+            center = [str(row), str(col)]
+            if np.nanmin(col) <= min_distance or np.nanmin(row) <= min_distance:
+                flag = "Close to edge"
+            else:
+                flag = "--"
 
             target.model_uncert()
             calculate_better_aperture(target, 0.001, 2, 0.7, 15)
             arr0 = np.concatenate([np.asarray([kic]), center, get_aperture_center(target), \
-                                   target.img.flatten()])
+                                   target.img.flatten(), np.asarray([flag])])
             arr1 = np.concatenate([np.asarray([kic]), target.obs_flux, \
                                    target.flux_uncert, target.target_uncert])
             model_background(target, 0.2, 15)
