@@ -29,7 +29,7 @@ def get_nth_col(fin, n=0, sep=',', skip_rows=0):
             next(f)
         reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
         for row in reader:
-            all_kics.append(row[n_col])
+            all_kics.append(row[n])
     logger.info("done: %d kics" % len(all_kics))
     return all_kics
 

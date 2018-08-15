@@ -8,6 +8,7 @@ import csv
 from plot import plot_data, print_lc_improved
 import matplotlib.pyplot as plt
 import itertools
+import kplr
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -50,7 +51,7 @@ def replace_lines_fix(fin_old, fin_new, fout):
         for icount, row in enumerate(r):
             if row[0] in fix_kics:
                 i = fix_kics.index(row[0])
-                w.writerow(all_data_new[i+1])
+                w.writerow(all_data_new[i])
                 count_fix += 1
             else:
                 w.writerow(row)
@@ -85,18 +86,21 @@ def replace_all_channels(fin_new, fin_old, fout):
     print "replaced all", index
     return 0
 
-def print_new_channels(kics, fout):
+def print_new_channels(kics, fout, min_distance=20, print_headers=True, shape=(1070, 1132)):
     successes = 0
     failed = 0
-    with open(fout, "r") as f:
+    with open(fout, "wb") as f:
         w = csv.writer(f, delimiter=',', lineterminator='\n')
         for icount, kic in enumerate(kics):
-            target = run_photometry(kic)
-            if target == 1:
+            try:
+                client = kplr.API()
+                targ = client.target(kic)
+            except Exception as e:
                 w.writerow([kic,"FAILED","--"])
                 failed += 1
+                print e.message
                 continue
-            targ = target.target
+
             col = [targ.params['Column_0'], targ.params['Column_1'],
                    targ.params['Column_2'], targ.params['Column_3']]
             row = [targ.params['Row_0'], targ.params['Row_1'],
@@ -107,7 +111,6 @@ def print_new_channels(kics, fout):
                     col[i] = np.nan
                     row[i] = np.nan
 
-            center = [str(row), str(col)]
             concat = [np.nanmin(row), np.nanmin(col), abs(shape[0]-np.nanmax(row)), \
                       abs(shape[1]-np.nanmax(col))]
             if is_n_bools(concat, 1, lambda x: x <= min_distance):
@@ -115,7 +118,8 @@ def print_new_channels(kics, fout):
             else:
                 flag = "--"
 
-            w.writerow([kic] + [center] + [flag])
+            dabs = [kic, str(row), str(col), flag]
+            w.writerow(dabs)
             successes += 1
             print kic, icount
     print "new channels", successes, failed
@@ -141,6 +145,8 @@ def main():
     # plt.show()
 
     # replace_all_channels("./tests/new.txt", "./tests/old.txt", "./tests/bak.txt")
+    kics = ["757280", "757450"]
+    print_new_channels(kics, "./res.out", 20, True)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")
