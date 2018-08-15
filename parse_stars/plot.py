@@ -1,10 +1,13 @@
-from utils import get_sub_kwargs, clip_array, build_arr_n_names, format_arr
+"""
+FUNCTIONS TO PLOT OUT LIGHT CURVES/APERTURE OF STAR
+"""
+
+from utils import get_sub_kwargs, clip_array, build_arr_n_names, format_arr, is_n_bools
 from aperture import run_photometry, improve_aperture, get_aperture_center, \
     calculate_better_aperture, model_background, make_background_mask
 from settings import setup_logging, mpl_setup
 
 logger = setup_logging()
-mpl_setup()
 
 import os
 import csv
@@ -14,8 +17,11 @@ from matplotlib import gridspec as gs
 from matplotlib.backends.backend_pdf import PdfPages
 
 
-# function, creates plot for one target, assumes already have obs_flux, flux_uncert
 def plot_data(target, count=0):
+    """
+    creates plot of light curve and aperture for one target
+    assumes already have right data before from target
+    """
     fig = plt.figure(figsize=(11,8))
     gs.GridSpec(3,3)
 
@@ -38,10 +44,16 @@ def plot_data(target, count=0):
     return fig
 
 
-# helper for plot_targets that sets up photometry of a star
-# runs a photometry and tests a list of boolean functions on it then creates a plot for it
 def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
                    min_val=5000, ntargets=100):
+    """
+    helper
+    runs a photometry and tests a list of boolean functions on it then creates a plot for it
+
+    :boolean_funcs: list of boolean functions that determine if star has issues with light curve
+    :pick_bad: if want to plot only problematic stars
+    :edge_lim, min_val, ntargets: see f3 photometry
+    """
     target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
     if target == 1:
         return target
@@ -56,8 +68,15 @@ def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
     return target
 
 
-# function, plots list of targets to a filename if the boolean function is true
 def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
+    """
+    plots list of targets to a filename if boolean function is true for target
+
+    :filename: prefix of output filename
+    :boolean_funcs: boolean functions that take in a target and output True/False
+    :targets: list of targets to plot through, plots all in one file
+    :pick_bad: if want to plot problematic stars vs nonproblematic stars
+    """
     filename = filename.rsplit(".", 1)[0]
     total = len(targets)
     count = 1
@@ -82,9 +101,16 @@ def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     return parsed_targets
 
 
-# function, plots light curves after each given function
-# kwargs is any optional argument for any function
 def plot_functions(targ, fout="./", save_fig=True, *funcs, **kwargs):
+    """
+    plots set of light curves after each given function
+    meant to see affects of functions on each target's light curve/aperture
+
+    :fout: output folder
+    :save_fig: save figure to pdf as apposed to showing the plots
+    :funcs: list of functions that take in target
+    :kwargs: optional arguments for list of functions, unique for each function
+    """
     target = run_photometry(targ)
     if target == 1:
         return target
@@ -110,18 +136,36 @@ def plot_functions(targ, fout="./", save_fig=True, *funcs, **kwargs):
     return target
 
 
-# helper, plots a box for given coordinates
 def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
+    """
+    helper
+    plots a box around given coordinates
+    """
     plt.plot([x1, x1], [y1, y2], marker, **kwargs)
     plt.plot([x2, x2], [y1, y2], marker, **kwargs)
     plt.plot([x1, x2], [y1, y1], marker, **kwargs)
     plt.plot([x1, x2], [y2, y2], marker, **kwargs)
+    return 0
 
 
 # function, plots the different light curves for original calculation, with improved aperture,
 #   and the effects of background modelling
 def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, \
                               max_factor=0.2, min_img=-1000, max_img=1000, save_pdf=True):
+    """
+    plots information about different light curves before/after (1) improved aperture,
+      (2) background modelling
+
+    :targ: kic to plot
+    :fout: output folder
+    :image_region: region to plot around center of star
+    :model_pix: background modelling region
+    :mask_factor: % top bright pixels to collect from PSF to create basic PSF mask for aperture
+    :max_factor: % top bright stars to create mask for background modelling
+    :min_img: vmin for all plots, None if no minimum
+    :max_img: vmax for all plots, None if no maximum
+    :save_pdf: saves all plots to pdf, will always save before/after light curves
+    """
     target = run_photometry(targ)
     if target == 1:
         return target
@@ -147,6 +191,7 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
     plot_box(min_j, max_j, min_i, max_i, 'r-', linewidth=1)
 
     with PdfPages(fout + targ + "_out.pdf") as pdf:
+
         # original plot
         fig0 = plot_data(target)
         plt.gcf().text(4/8.5, 1/11., str(np.nanmean(target.flux_uncert)), \
@@ -172,6 +217,7 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
             z = np.ma.masked_array(img, mask=mask)
             img -= np.ma.median(z)
 
+            # plots first background modelling
             if i == 0:
                 n = 3
                 fig2 = plt.figure(2, figsize=(10, 4))
@@ -224,14 +270,26 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
     return target
 
 
-# function, prints aperture, calculated light curves before and after improvement to 3 different text files
-def print_lc_improved(kics, fouts, min_distance=20, print_headers=True):
+def print_lc_improved(kics, fouts, min_distance=20, print_headers=True, shape=(1070, 1132)):
+    """
+    plots out database for (1) improved aperture after method,
+      (2) light curve before background modelling, (3) light curve after
+      (4) flag that describes if star is close to edge of detector
+    assumes basic settings that seems to work best that we found, edit function to change settings
+
+    :kics: list of kics to print to database
+    :fouts: list of filenames for the three output files (1-3)
+    :min_distance: distance of star center to CCD to be determined as too close to edge
+    :print_headers: True if want to print headers
+    :shape: shape of whole file, usually for Kepler FFI
+    """
     fout0, fout1, fout2 = fouts
     successes = 0
     is_first = True
+    total = len(kics)
 
     if print_headers:
-        names0 = ["KIC"] + build_arr_n_names("postcard_center", 2) + \
+        names0 = ["KIC"] + build_arr_n_names("center", 2) + \
                  build_arr_n_names("aperture_center", 2) + build_arr_n_names("img", 900) + ["Note"]
         names1 = ["KIC"] + build_arr_n_names("flux_old", 52) + \
                  build_arr_n_names("est_unc_old", 4) + build_arr_n_names("mod_unc_old", 52)
@@ -243,7 +301,7 @@ def print_lc_improved(kics, fouts, min_distance=20, print_headers=True):
         w1 = csv.writer(f1, delimiter=',', lineterminator='\n')
         w2 = csv.writer(f2, delimiter=',', lineterminator='\n')
 
-        for kic in kics:
+        for i, kic in enumerate(kics, 1):
             target = run_photometry(kic)
             if target == 1:
                 continue
@@ -262,8 +320,17 @@ def print_lc_improved(kics, fouts, min_distance=20, print_headers=True):
                    targ.params['Column_2'], targ.params['Column_3']]
             row = [targ.params['Row_0'], targ.params['Row_1'],
                    targ.params['Row_2'], targ.params['Row_3']]
+
+            for i in range(len(col)):
+                if col[i] is None or row[i] is None:
+                    col[i] = np.nan
+                    row[i] = np.nan
+
             center = [str(row), str(col)]
-            if np.nanmin(col) <= min_distance or np.nanmin(row) <= min_distance:
+
+            concat = [np.nanmin(row), np.nanmin(col), abs(shape[0]-np.nanmax(row)), \
+                      abs(shape[1]-np.nanmax(col))]
+            if is_n_bools(concat, 1, lambda x: x <= min_distance):
                 flag = "Close to edge"
             else:
                 flag = "--"
@@ -283,6 +350,9 @@ def print_lc_improved(kics, fouts, min_distance=20, print_headers=True):
             w2.writerow(arr2)
 
             successes += 1
-            logger.info("done: %s" % kic)
+            logger.info("done: %s, %d/%d" % (kic, i, total))
     logger.info("done: %d kics", successes)
     return 0
+
+if __name__ == "__main__":
+    mpl_setup()

@@ -1,3 +1,8 @@
+"""
+USEFUL FUNCTIONS FOR GENERAL USAGE ACROSS ALL CODE
+"""
+
+
 from settings import setup_logging
 logger = setup_logging()
 
@@ -5,66 +10,34 @@ import csv
 import funcsigs
 import numpy as np
 
-# checks if given kids have data from q1-17 kepler targets
-# assume all kids are unique and all data exists
 def get_existing_kics(arr1, arr2):
+    """
+    checks subset of kics that exist within both arrays
+    """
     list_kics = set(arr1).intersection(arr2)
     logger.info("done: %d kics" % len(list_kics))
     return list_kics
 
-# checks if given kics is in file and that data exists for given columns
-# WARNING: no way to separate split string by spaces and detect no data
-def get_good_existing_kics(fin, list_kids, param_arr):
-    list_params_kics = []
-    exists_good_params = True
-    with open(fin) as f:
-        for line in f:
-            curr_params = list(filter(None, line.strip().split(' ')))
-            curr_params_kic = curr_params[0]
-            for param_i in param_arr:
-                if curr_params[param_i] == '':
-                    exists_good_params = False
-                    break
-            if exists_good_params:
-                list_params_kids.append(curr_param_kic)
-                exists_good_params = True
-    list_good_kids = set(list_kics).intersection(list_params_kics)
-    logger.info("done: %d kids" % len(list_good_kics))
-    return list_good_kics
 
-# checks if given kics is in file and data exists for all columns
-def get_good_kics(fin, list_kics):
-    pass
-
-# get all kids from several files
-# assume all kids are unique from each file, assumes first line are fieldnames
-def get_kics_files(list_files, sep=',', skip_rows=1):
-    all_kics = []
-    for files_i in range(len(list_files)):
-        with open(list_files[files_i]) as f:
-            for _ in range(skip_rows):
-                next(f)
-            reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
-            for row in reader:
-                if row:
-                    all_kics.append(row[0])
-    logger.info("get_kics_files done: %d kics" % len(all_kics))
-    return all_kics
-
-# get list of kics from a file where kic is first of a column
-def get_kics(fin, sep=',', skip_rows=0):
+def get_nth_col(fin, n=0, sep=',', skip_rows=0):
+    """
+    gets nth column for all lines from given file
+    """
     all_kics = []
     with open(fin) as f:
         for _ in range(skip_rows):
             next(f)
         reader = csv.reader(f, delimiter=sep, skipinitialspace=True)
         for row in reader:
-            all_kics.append(row[0])
+            all_kics.append(row[n_col])
     logger.info("done: %d kics" % len(all_kics))
     return all_kics
 
-# get m kics for every nth kic
-def get_nth_kics(fin, n, m, sep=',', skip_rows=0):
+
+def get_nth_kics(fin, n, m, nth_col=0, sep=',', skip_rows=0):
+    """
+    within nth column of table, gets m values for every n value
+    """
     kics = []
     start = 0
     if m > n:
@@ -75,17 +48,20 @@ def get_nth_kics(fin, n, m, sep=',', skip_rows=0):
             next(f)
         for i, row in enumerate(reader, 1):
             if start < m:
-                kics.append(row[0])
+                kics.append(row[nth_col])
                 start += 1
             else:
                 if i % n == 0:
-                    kics.append(row[0])
+                    kics.append(row[nth_col])
                     start = 0
     logger.info("done: %d kics" % len(kics))
     return kics
 
-# prompts warning if file exists
+
 def does_path_exists(fin):
+    """
+    prompts warning if file exists
+    """
     if os.path.exists(fin):
         ans = raw_input("File " + fin + " already exists, proceed for all? (y/n) ")
         ans = ans.strip().lower()
@@ -95,14 +71,16 @@ def does_path_exists(fin):
             return True
     return False
 
-# prints array to column in file, splits up files by kids_per_file
-# returns length of array
-def array_to_file(arr, fout, kids_per_file=9999, bypass_prompt=True):
+
+def array_to_file(arr, fout, n=9999, bypass_prompt=True):
+    """
+    prints array to column in file, limits to n lines per file
+    """
     arr_i = 0
     total_kids = len(arr)
     output_files_i = 0
-    no_of_files = total_kids//kids_per_file + 1
-    remainder_of_files = total_kids%kids_per_file
+    no_of_files = total_kids//n + 1
+    remainder_of_files = total_kids%n
     good_kids_filename = fin + "_" + str(output_files_i) + ".txt"
 
     if not bypass_prompt and does_path_exists(fout):
@@ -114,21 +92,27 @@ def array_to_file(arr, fout, kids_per_file=9999, bypass_prompt=True):
             number_kids_per_file = remainder_of_files
         with open(good_kids_filename, 'w') as write_f:
             writer = csv.writer(write_f, delimiter=',', lineterminator='\n')
-            for i in range(arr_i, arr_i + kids_per_file):
+            for i in range(arr_i, arr_i + n):
                 writer.writerow([arr[i]])
-            arr_i = arr_i + kids_per_file
+            arr_i = arr_i + n
     logger.info(str(total_kids) + " entries in " + str(np_of_files) + " files")
     logger.info("done")
-    return total_kids
+    return 0
 
-# gets dimension of nest array
+
 def get_dim(arr):
+    """
+    gets dimension of nested array
+    """
     if not type(arr[0]) == list:
         return 1
     return 1 + get_dim(arr[0])
 
-# prints array to each row in filename, works for both 1d and 2d arrays
+
 def simple_array_to_file(fout, arr):
+    """
+    prints array to each row in filename, works for both 1d and 2d arrays
+    """
     if type(arr) == np.ndarray:
         np.savetxt(fout, arr, delimiter=',', newline='\n')
     else:
@@ -146,9 +130,14 @@ def simple_array_to_file(fout, arr):
     logger.info("done")
     return 0
 
-# clips array based on maximum boundaries given
-# is_max_bounds is True for upper bound, is False for minimum bound
+
 def clip_array(coords, max_coords, is_max_bounds):
+    """
+    clips array values based on minimum/maximum boundaries given
+
+    :max_coords: maximum boundaries of array, must match coords dimensions
+    :is_max_bounds: is True for maximum/upper bounds, False for minimum bounds
+    """
     length = len(coords)
     if length != len(max_coords):
         logger.error("clip_array dimensions must be same")
@@ -162,8 +151,11 @@ def clip_array(coords, max_coords, is_max_bounds):
         results += add
     return results
 
-# calculates if elements of array satisfies boolean function at least n times
+
 def is_n_bools(arr, n, bool_func):
+    """
+    calculates if elements of array satisfies boolean function at least n times
+    """
     n_bools = False
     for i in arr:
         if bool_func(i):
@@ -173,33 +165,53 @@ def is_n_bools(arr, n, bool_func):
             break
     return n_bools
 
-# formats array to print by separation
+
 def format_arr(arr, sep="\t"):
+    """
+    formats array as string to print by separation
+    """
     return sep.join(str(i) for i in arr)
 
-# returns tuple of keys from a dictionary
+
 def get_keys(dic):
+    """
+    return tuple of keys from a dictionary
+    """
     keys = ()
     for key in dic:
         keys += (key,)
     return keys
 
-# helper, gets a subset of main_dic from subset of keys between both dictionaries
+
 def get_union_dic(main_dic, secondary_dic):
+    """
+    helper
+    gets a subset of main dictionary from subset of keys between both dictionaries
+    """
     keys_main = get_keys(main_dic)
     keys_alt = get_keys(secondary_dic)
     sub_keys = set(keys_main).intersection(keys_alt)
     new_dic = {k: main_dic.get(k, None) for k in sub_keys}
     return new_dic
 
-# gets the right kwargs for a function from a larger set of kwargs
+
 def get_sub_kwargs(func, **kwargs):
+    """
+    helper to prevent errors
+    gets the right optional arguments for a function from a larger set of arguments
+    """
     sig = funcsigs.signature(func)
     func_kwargs = get_union_dic(kwargs, sig.parameters)
     return func_kwargs
 
-# builds array of strings and a counter as part of the string
+
 def build_arr_n_names(name, n):
+    """
+    builds array of strings starting with a prefix and ends with a counter
+
+    :name: prefix of string
+    :n: number of strings to build
+    """
     arr = []
     max_digits = len(str(n))
     for i in range(n):

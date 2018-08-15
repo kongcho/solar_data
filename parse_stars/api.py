@@ -1,3 +1,7 @@
+"""
+FUNCTIONS TO INTERACT WITH DATABASES TO GET PARAMETERS FOR EACH STAR
+"""
+
 import settings
 from utils import get_kics
 from parse import table_api
@@ -135,6 +139,12 @@ class api(object):
             curr_params["neighbours"] = neighbours
             reses.append(curr_params)
         return reses
+
+    def get_close_to_detector(self):
+        pass
+
+    def get_detector_corner(self):
+        pass
 
     def get_lcs_times_uncerts(self, kics, lc_file):
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)

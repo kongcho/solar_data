@@ -1,3 +1,7 @@
+"""
+GLOBAL VARIABLES AND LOCATIONS AND CODE LOGGING TO SETUP CODE
+"""
+
 import logging
 import sys
 import os
@@ -85,6 +89,9 @@ def setup_main_logging():
     return logger
 
 
+## Headings/types for databases to use
+
+# Mathur
 updated_dic = {
     "kic": ("KIC", int),
     "teff": ("Teff", int), # Effective temperature; output
@@ -114,6 +121,7 @@ updated_dic = {
     "mod": ("Mod", str) # Provenance of output values
 }
 
+# McQuillian
 periodic_dic = {
     "KID": ("KID", int),
     "Teff": ("Teff", int), # K, Dressing & Charbonneau
@@ -128,6 +136,7 @@ periodic_dic = {
     "Flag": ("Flag", str) # Corrections/smoothing
 }
 
+# McQuillian
 nonperiodic_dic = {
     "KID": ("KID", int),
     "Teff": ("Teff", int),
@@ -140,7 +149,5 @@ nonperiodic_dic = {
     "DC": ("DC", int),
 }
 
-mast_table_dic = {
-}
-
+# MAST database/kplr
 mast_params = []

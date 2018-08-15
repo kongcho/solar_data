@@ -1,7 +1,10 @@
+"""
+FUNCTIONS THAT DETERMINES A STAR'S VARIABILITY FROM LIGHT CURVE
+"""
+
 from aperture import run_photometry
 
 import matplotlib.pyplot as plt
-
 import numpy as np
 from astropy.modeling import models, fitting
 from scipy import optimize

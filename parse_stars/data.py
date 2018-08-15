@@ -1,3 +1,7 @@
+"""
+FUNCTIONS THAT GETS RIGHT PARAMETERS FOR EACH STAR / FILTER PARAMETERS
+"""
+
 from settings import setup_logging
 from api import api
 from aperture import run_photometry, calculate_better_aperture, model_background

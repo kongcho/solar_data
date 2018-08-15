@@ -1,3 +1,7 @@
+"""
+FUNCTIONS THAT AFFECT/WORK ON THE APERTURE OF THE STAR
+"""
+
 from utils import clip_array, is_n_bools
 from settings import setup_logging, ffidata_folder, f3_location
 logger = setup_logging()
