@@ -3,7 +3,7 @@ FUNCTIONS TO INTERACT WITH DATABASES TO GET PARAMETERS FOR EACH STAR
 """
 
 import settings
-from utils import get_kics
+from utils import get_nth_col
 from parse import table_api
 from mast import mast_api
 logger = settings.setup_logging()
@@ -97,8 +97,8 @@ class api(object):
         return param_res
 
     def get_periodic_or_not(self, kics):
-        periodic = get_kics(self.periodic_dir, ",", 1)
-        unperiodics = get_kics(self.nonperiodic_dir, ",", 1)
+        periodic = get_nth_col(self.periodic_dir, 0, ",", 1)
+        unperiodics = get_nth_col(self.nonperiodic_dir, 0, ",", 1)
         reses = []
         for kic in kics:
             curr_params = {}
