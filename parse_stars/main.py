@@ -14,117 +14,6 @@ def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
     return 0
 
-def fix_things(failed_kics, fix_kics):
-    print_lc_improved(failed_kics, ("./results/failed_img.out", \
-                                    "./results/failed_old.out", "./results/failed_new.old"))
-    logger.info("failed kics done")
-    print_lc_improved(fix_kics, ("./results/fix_img.out", \
-                                 "./results/fix_old.out", "./results/fix_new.out"))
-    logger.info("fixed kics done")
-
-def from_server():
-    t = table_api("/data/ffidata/results/lc_data_img.out", ",", 1, None)
-    all_t = t.parse_table_arrs([0] + range(5, 905), None, [int] + [float]*900)
-    all_t_np = np.array(all_t)
-    print all_t_np.shape
-    print all_t_np[0]
-    count = 0
-    succ = 0
-    for row in all_t_np:
-        if not np.any(row[1:]):
-            count += 1
-            print row[0]
-        else:
-            succ += 1
-    print count, succ
-
-def replace_lines_fix(fin_old, fin_new, fout):
-    fix_kics = get_kics(fin_new, ",", skip_rows=1)
-    count_fix = 0
-    count_nonfix = 0
-    with open(fin_new, "r") as fin:
-        reader = csv.reader(fin, delimiter=",", skipinitialspace=True)
-        all_data_new = list(reader)
-    with open(fin_old, "r") as fio, open(fout, "wb") as fo:
-        w = csv.writer(fo, delimiter=",")
-        r = csv.reader(fio, delimiter=",", skipinitialspace=True)
-        for icount, row in enumerate(r):
-            if row[0] in fix_kics:
-                i = fix_kics.index(row[0])
-                w.writerow(all_data_new[i])
-                count_fix += 1
-            else:
-                w.writerow(row)
-                count_nonfix += 1
-            print icount, "done"
-    print count_fix, count_nonfix, count_fix+count_nonfix
-    return 0
-
-def replace_all_channels(fin_new, fin_old, fout):
-    fix_kics = get_kics(fin_new, ",", 0)
-    old_kics = get_kics(fin_old, ",", 1)
-    if fix_kics != old_kics:
-        print "ERROR DIFFERENT KICS"
-        return 1
-
-    with open(fin_new, "r") as fin, open(fin_old, "r") as fio, open(fout, "wb") as fo:
-        w = csv.writer(fo, delimiter=",", lineterminator="\n")
-        fo.write(next(fio).strip() + ",Note\n")
-        rn = csv.reader(fin, delimiter=",", skipinitialspace=True)
-        ro = csv.reader(fio, delimiter=",", skipinitialspace=True)
-        index = 0
-        for rown, rowo in itertools.izip(rn, ro):
-            #check
-            if rown[0] != rowo[0]:
-                print "ERROR KICS NOT IN ORDER", rown[0], rowo[0]
-                return 1
-
-            new_arr = [rown[0]] + rown[1:3] + rowo[3:] + [rown[-1]]
-            w.writerow(new_arr)
-            index += 1
-            print rown[0], index
-    print "replaced all", index
-    return 0
-
-def print_new_channels(kics, fout, min_distance=20, print_headers=True, shape=(1070, 1132)):
-    successes = 0
-    failed = 0
-    with open(fout, "wb") as f:
-        w = csv.writer(f, delimiter=',', lineterminator='\n')
-        for icount, kic in enumerate(kics):
-            try:
-                client = kplr.API()
-                targ = client.target(kic)
-            except Exception as e:
-                w.writerow([kic,"FAILED","--"])
-                failed += 1
-                print e.message
-                continue
-
-            col = [targ.params['Column_0'], targ.params['Column_1'],
-                   targ.params['Column_2'], targ.params['Column_3']]
-            row = [targ.params['Row_0'], targ.params['Row_1'],
-                   targ.params['Row_2'], targ.params['Row_3']]
-
-            for i in range(len(col)):
-                if col[i] is None or row[i] is None:
-                    col[i] = np.nan
-                    row[i] = np.nan
-
-            concat = [np.nanmin(row), np.nanmin(col), abs(shape[0]-np.nanmax(row)), \
-                      abs(shape[1]-np.nanmax(col))]
-            if is_n_bools(concat, 1, lambda x: x <= min_distance):
-                flag = "Close to edge"
-            else:
-                flag = "--"
-
-            dabs = [kic, str(row), str(col), flag]
-            w.writerow(dabs)
-            successes += 1
-            print kic, icount
-    print "new channels", successes, failed
-    return 0
-
 def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
@@ -139,14 +28,10 @@ def main():
     # n.get_basic_params(0.15)
     # print n.res
 
-    # target = run_photometry("8754750", plot_flag=False)
-    # calculate_better_aperture(target, 0.001, 2, 0.7, 15)
-    # plot_data(target)
-    # plt.show()
-
-    # replace_all_channels("./tests/new.txt", "./tests/old.txt", "./tests/bak.txt")
-    kics = ["757280", "757450"]
-    print_new_channels(kics, "./res.out", 20, True)
+    target = run_photometry("757137", plot_flag=False)
+    calculate_better_aperture(target, 0.001, 2, 0.7, 15)
+    plot_data(target)
+    plt.show()
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

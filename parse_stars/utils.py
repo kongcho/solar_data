@@ -24,7 +24,7 @@ def get_nth_col(fin, n=0, sep=',', skip_rows=0):
     gets nth column for all lines from given file
     """
     all_kics = []
-    with open(fin) as f:
+    with open(fin, 'r') as f:
         for _ in range(skip_rows):
             next(f)
         reader = csv.reader(f, delimiter=sep, skipinitialspace=True)

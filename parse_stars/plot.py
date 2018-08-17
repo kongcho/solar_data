@@ -321,10 +321,10 @@ def print_lc_improved(kics, fouts, min_distance=20, print_headers=True, shape=(1
             row = [targ.params['Row_0'], targ.params['Row_1'],
                    targ.params['Row_2'], targ.params['Row_3']]
 
-            for i in range(len(col)):
-                if col[i] is None or row[i] is None:
-                    col[i] = np.nan
-                    row[i] = np.nan
+            for n in range(len(col)):
+                if col[n] is None or row[n] is None:
+                    col[n] = np.nan
+                    row[n] = np.nan
 
             center = [str(row), str(col)]
 

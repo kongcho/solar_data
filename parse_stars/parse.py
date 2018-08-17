@@ -17,13 +17,35 @@ class table_api(object):
         self.skip_rows = skip_rows
         self.kic_col_no = kic_col_no
 
+    # converts nth col of file to array
+    def get_nth_col(self, n, col_type=None):
+        arr = []
+        with open(self.filename, 'r') as f:
+            for _ in range(self.skip_rows):
+                next(f)
+            reader = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
+            for row in reader:
+                arr.append(row[n])
+            if col_type is not None:
+                try:
+                    arr = map(col_type, arr)
+                except Exception as e:
+                    pass
+        return arr
+
     # converts nth row of file to array
-    def get_nth_row(self, n):
+    def get_nth_row(self, n, types=None):
         with open(self.filename, 'r') as f:
             for _ in range(n-1):
                 next(f)
             reader = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             arr = next(reader)
+        if types is not None:
+            for i, col_type in enumerate(types):
+                try:
+                    arr[i] = col_type(arr[i])
+                except Exception as e:
+                    pass
         return arr
 
     # function, gets columns indexes of given param names to parse table by column number

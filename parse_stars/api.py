@@ -22,6 +22,7 @@ class api(object):
         self.lc_img_dir = settings.filename_lc_img
         self.lc_new_dir = settings.filename_lc_new
         self.lc_old_dir = settings.filename_lc_old
+        self.lc_obs_dir = settings.filename_lc_obs
 
     def get_params(self, kics, params, **neighbour_filters):
         new_params = [{} for _ in kics]
@@ -47,7 +48,12 @@ class api(object):
         if "lcs_old" in params:
             self._update_params(new_params, self.get_lcs_times_uncerts(kics, self.lc_old_dir))
         if "lcs_img" in params:
-            self._update_params(new_params, self.get_lcs_imgs(kics))
+            self._update_params(new_params, self.get_lcs_imgs(kics, self.lc_img_dir))
+        if "lcs_qs" in params:
+            self._update_params(new_params, self.get_lcs_qs(kics, self.lc_obs_dir))
+        if "close_edges" in params:
+            self._update_params(new_params, self.get_close_edges(kics))
+
         self._update_params(new_params, self.get_updated_params(kics, updated_pars))
         self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
@@ -140,11 +146,26 @@ class api(object):
             reses.append(curr_params)
         return reses
 
-    def get_close_to_detector(self):
-        pass
-
-    def get_detector_corner(self):
-        pass
+    def get_close_edges(self, kics, min_distance=20, shape=(1070, 1132)):
+        reses = []
+        rows_ks = ["Row_0", "Row_1", "Row_2", "Row_3"]
+        cols_ks = ["Column_0", "Column_1", "Column_2", "Column_3"]
+        mast_reses = self.get_mast_params(kics, keys)
+        for res in mast_reses:
+            curr_params = {}
+            curr_params["close_edges"] = []
+            rows = [res[k] if res[k] is not None else np.nan for k in rows_ks]
+            cols = [res[k] if res[k] is not None else np.nan for k in cols_ks]
+            if np.nanmin(rows) <= min_distance:
+                curr_params["close_edges"].append("Top")
+            elif abs(shape[0]-np.nanmax(rows)) <= min_distance:
+                curr_params["close_edges"].append("Bottom")
+            if np.nanmin(cols) <= min_distance:
+                curr_params["close_edges"].append("Left")
+            elif abs(shape[0]-np.nanmax(rows)) <= min_distance:
+                curr_params["close_edges"].append("Right")
+            reses.append(curr_params)
+        return reses
 
     def get_lcs_times_uncerts(self, kics, lc_file):
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
@@ -165,7 +186,7 @@ class api(object):
             reses.append(curr_params)
         return reses
 
-    def get_lcs_imgs(self, kics):
+    def get_lcs_imgs(self, kics, lc_file):
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
         arrs = t.parse_table_arrs(range(1, 902), kics=kics, types=[float]*902)
         reses = []
@@ -180,3 +201,17 @@ class api(object):
             reses.append(curr_params)
         return reses
 
+    def get_lcs_qs(self, kics, lc_file):
+        t = table_api(lc_file, delimiter=" ", skip_rows=0, kic_col_no=None)
+        times = t.get_nth_col(0, float)
+        qs = t.get_nth_col(1, int)
+        years = t.get_nth_col(2, int)
+        curr_params = {"qs": qs, "years": years} # same pointer, unchanged data
+        reses = [curr_params]*len(kics)
+        return reses
+
+if __name__ == "__main__":
+    a = api()
+    kics = ["757280", "757450"]
+    b = a.get_mast_params(kics, ["g_KIS"])
+    print b
