@@ -66,7 +66,7 @@ class table_api(object):
 
     def parse_table_arrs(self, col_nos, kics=None, types=None):
         completed_kics = [False]*len(kics) if kics is not None else [False]
-        whole = []
+        whole = [[]]*len(kics) if kics is not None else []
         if self.kic_col_no is not None:
             try:
                 col_nos.remove(self.kic_col_no)
@@ -84,7 +84,8 @@ class table_api(object):
                     return whole
                 if kics is not None:
                     if row[self.kic_col_no] in kics:
-                        completed_kics[kics.index(row[self.kic_col_no])] = True
+                        whole_index = kics.index(row[self.kic_col_no])
+                        completed_kics[whole_index] = True
                     else:
                         continue
                 param_arr = []
@@ -95,13 +96,16 @@ class table_api(object):
                         except Exception as e:
                             pass
                     param_arr.append(row[no])
-                whole.append(param_arr)
+                if kics is not None:
+                    whole[whole_index] = param_arr
+                else:
+                    whole.append(param_arr)
         return whole
 
     # function, can parse through kepler_fov_search* and table_periodic tables
     def parse_table_dicts(self, col_nos, kics=None, types=None, params=None):
         completed_kics = [False]*len(kics) if kics is not None else [False]
-        whole = []
+        whole = [[]]*len(kics) if kics is not None else []
         if params is None:
             params = map(str, col_nos)
         else:
@@ -115,7 +119,8 @@ class table_api(object):
                     return whole
                 if kics is not None:
                     if row[self.kic_col_no] in kics:
-                        completed_kics[kics.index(row[self.kic_col_no])] = True
+                        whole_index = kics.index(row[self.kic_col_no])
+                        completed_kics[whole_index] = True
                     else:
                         continue
                 curr_dict = {}
@@ -126,7 +131,10 @@ class table_api(object):
                         except Exception as e:
                             pass
                     curr_dict[params[j]] = row[no]
-                whole.append(curr_dict)
+                if kics is not None:
+                    whole[whole_index] = curr_dict
+                else:
+                    whole.append(curr_dict)
         return whole
 
     def filter_dic(self, dic, indexes):
