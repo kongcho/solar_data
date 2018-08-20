@@ -20,8 +20,8 @@ class model(object):
     def _damped_sine_model(self, x, inits):
         return inits[0]*np.exp(-1*inits[1]*x)*np.sin(2*np.pi*inits[2]*x + inits[3])
 
-    def _sine_model(self, inits):
-        return inits[0]*np.sin(2*np.pi*inits[1]*self.x + inits[2])
+    def _sine_model(self, x, inits):
+        return inits[0]*np.sin(2*np.pi*inits[1]*x + inits[2])
 
     def _log_model(self, inits):
         return inits[0] + inits[1]*np.log(self.x)
@@ -30,7 +30,8 @@ class model(object):
         return model_func(x, inits) - y
 
     def make_scipy_model(self, model_func, err_func, init_arr):
-        p, success = optimize.leastsq(err_func, init_arr, args=(self.x, self.y, model_func))
+        p, success = optimize.leastsq(err_func, init_arr, args=(self.x, self.y, model_func), \
+                                      maxfev=2000, xtol=0.001, ftol=0.001)
         model = model_func(self.x, p)
         return model
 
@@ -49,7 +50,7 @@ class model(object):
 
         for i, res in enumerate(self.reses):
             label, model, k = res
-            plt.plot(self.x, model, label=label)
+            plt.plot(self.x, model, label=label, linewidth=0.5)
 
         plt.legend(loc=2)
         logger.info("done: %d models" % len(self.reses))
@@ -111,23 +112,35 @@ class model(object):
         #                 self.make_scipy_model(self._damped_sine_model, self._simple_err_func, \
         #                                       damped_sine_inits), len(damped_sine_inits))
 
-        for freq in self._estimate_freqs(self.x, 13, 0.5):
-            self._setup_res("Sine1D %f" % freq, \
-                            self.make_astropy_model(models.Sine1D, fitting.LevMarLSQFitter(), \
-                                                    frequency=freq), 2)
+        # for freq in self._estimate_freqs(self.x, 13, 0.125):
+        #     self._setup_res("Sine1D %f" % freq, \
+        #                     self.make_astropy_model(models.Sine1D, fitting.LevMarLSQFitter(), \
+        #                                             frequency=freq), 3)
 
+        for freq in self._estimate_freqs(self.x, 13, 0.25):
+            for amp in np.arange(0, 0.1, 0.05):
+                self._setup_res("Sine1D %f %f" % (freq, amp), \
+                                # self.make_astropy_model(models.Sine1D, fitting.LevMarLSQFitter(), \
+                                #                         frequency=freq, amplitude=amp), 3)
+                                self.make_scipy_model(self._sine_model, self._simple_err_func, \
+                                                      [amp, freq, 0]), 3)
+        # print len(self.reses)
+        # print self.reses[1]
+        # print self.reses[10]
         logger.info("done")
         return 0
 
     def is_variable(self):
         self.run_through_models()
+
         accs = [self._determine_accuracy(res) for res in self.reses]
         best_i = np.argmin(accs)
+        best_lab = self.reses[best_i][0]
 
-        bools = [not self.reses[best_i][0] == "Const1D"]
+        bools = [not best_lab == "Const1D"]
         result = all(bools)
-        logger.info("done: %s, %s" % (result, self.reses[best_i][0]))
-        return result
+        logger.info("done: %s, %s" % (result, best_lab))
+        return result, best_lab
 
 def main():
     return 0
