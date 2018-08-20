@@ -3,14 +3,15 @@ FUNCTIONS THAT GETS RIGHT PARAMETERS FOR EACH STAR / FILTER PARAMETERS
 """
 
 from utils import get_nth_kics
-from settings import setup_logging
+from settings import setup_logging, mpl_setup
 from api import api
 from aperture import run_photometry, calculate_better_aperture, model_background
 from model import model
 logger = setup_logging()
 
-from math import pi
+from math import pi, log
 import matplotlib.pyplot as plt
+from collections import Counter
 
 class new_stars(object):
 
@@ -40,18 +41,26 @@ class new_stars(object):
             star["params"].update(params_arr[i])
         return 0
 
+    def _check_params(self, params):
+        for param in params:
+            if param not in self.params:
+                if param == "luminosity":
+                    self.get_luminosity()
+                if param == "variable":
+                    self.get_is_variable()
+                self.get_params([param])
+        return 0
+
     def _calc_luminosity(self, radius, teff):
         sb_const = float("5.670367e-08")
-        return sb_const*4*pi*(radius**2)*(teff**4)
+        return log(sb_const*4*pi*(radius**2)*(teff**4))
 
     def get_luminosity(self):
-        if "teff" not in self.params:
-            self.get_params(["teff"])
-        if "rad" not in self.params:
-            self.get_params(["rad"])
+        self._check_params(["teff", "rad"])
         for i, star in enumerate(self.res):
             star_pars = star["params"]
             star_pars["luminosity"] = self._calc_luminosity(star_pars["rad"], star_pars["teff"])
+        self.params.append("luminosity")
         return 0
 
     def get_basic_params(self, neighbour_arcsep=0.15):
@@ -71,7 +80,7 @@ class new_stars(object):
                     star_pars["neighbours_stars"].append(new_star)
         return 0
 
-    def filter_params(self, param_dic):
+    def filter_params(self, param_dic, edit_res=True):
         res_kics = []
         res_kics_idxs = []
         res_kics_bools = [True] * len(self.kics)
@@ -86,6 +95,8 @@ class new_stars(object):
                     if res_kics_bools[i] and not boolf(kic_params[param]):
                         res_kics_bools[i] = False
         res = [self.res[res_kics_idxs[i]] for i in range(len(res_kics)) if res_kics_bools[i]]
+        if edit_res:
+            self.res = res
         return res
 
     def _build_errorbars(self, x, err, qs):
@@ -95,12 +106,7 @@ class new_stars(object):
             error_list[g] += err[i]
         return 0
 
-    def _setup_xys(self, star):
-        if "lcs_new" not in self.params:
-            self.get_params(["lcs_new"])
-        if "lcs_qs" not in self.params:
-            self.get_params(["lcs_qs"])
-
+    def _setup_lcs_xys(self, star):
         star_pars = star["params"]
         y_dat = star_pars["lcs"]
         x_dat = star_pars["times"]
@@ -113,25 +119,121 @@ class new_stars(object):
         return y, x, yerr
 
     def get_is_variable(self):
+        self.variables = []
+        self.non_variables = []
+        self._check_params(["lcs_new", "lcs_qs"])
         for i, star in enumerate(self.res):
-            print "ADUHAOSDSAOID", star["kic"]
-            y, x, yerr = self._setup_xys(star)
+            y, x, yerr = self._setup_lcs_xys(star)
             m = model(y, x, yerr=yerr)
-            star["params"]["variable"] = m.is_variable()
-            m.plot_many_lines()
-            plt.show()
-            plt.close("all")
+            res, label = m.is_variable()
+            star["params"]["variable"] = res
+            star["params"]["curve_fit"] = label
+            if res:
+                self.variables.append(star["kic"])
+            else:
+                self.non_variables.append(star["kic"])
+
+                m.plot_many_lines()
+                plt.show()
+                plt.close("all")
+
+            merx = max(sorted(y)[:-2])
+            minx = min(sorted(y)[1:])
+            print "-------------\n\tSTAR", star["kic"], label
+            print "RANGE", merx, minx, merx-minx
+
+            # m.plot_many_lines()
+            # plt.show()
+            # plt.close("all")
+        self.params += ["variables", "curve_fit"]
         return 0
 
-    def plot_variable_params(self, param1, param2):
+    def plot_variable_params(self, paramy, paramx):
+        self._check_params(["variable", paramy, paramx])
+        non_var_xs = []
+        non_var_ys = []
+        var_xs = []
+        var_ys = []
         for i, star in enumerate(self.res):
-            pass
+            if star["kic"] in self.variables:
+                var_ys.append(star["params"][paramy])
+                var_xs.append(star["params"][paramx])
+            elif star["kic"] in self.non_variables:
+                non_var_ys.append(star["params"][paramy])
+                non_var_xs.append(star["params"][paramx])
+        plt.plot(non_var_xs, non_var_ys, "bo", label="non_variable")
+        plt.plot(var_xs, var_ys, "rx", label="variable")
+        plt.legend(loc="upper right")
+        plt.ylabel(paramy)
+        plt.xlabel(paramx)
+        plt.title("%s vs %s" % (paramy, paramx))
+        return 0
 
-    def plot_variable_freq(self, param):
-        pass
+    def plot_variable_bar(self, param):
+        self._check_params(["variable", param])
+        non_var_xs = []
+        var_xs = []
+        for i, star in enumerate(self.res):
+            if star["kic"] in self.variables:
+                var_xs.append(star["params"][param])
+            elif star["kic"] in self.non_variables:
+                non_var_xs.append(star["params"][param])
+
+        non_var_dic = Counter(non_var_xs)
+        var_dic = Counter(var_xs)
+        all_keys = list(set(non_var_dic.keys()+var_dic.keys()))
+        var_keys_hs = range(len(all_keys))
+        non_var_keys_hs = [x+0.2 for x in var_keys_hs]
+        var_xs_hs = [var_dic[k] if k in var_dic.keys() else 0 for k in all_keys]
+        non_var_xs_hs = [non_var_dic[k] if k in non_var_dic.keys() else 0 for k in all_keys]
+
+        plt.bar(var_keys_hs, var_xs_hs, width=0.2, color="r", alpha=0.5, \
+                label="variable", tick_label=all_keys)
+        plt.bar(non_var_keys_hs, non_var_xs_hs, width=0.2, color="b", alpha=0.5, \
+                label="non_variable")
+        plt.legend(loc="upper right")
+        plt.xlabel(param)
+        plt.ylabel("frequency")
+        plt.title("%s" % (param))
+        return 0
 
 if __name__ == "__main__":
-    kics = get_nth_kics("./data/table4.dat", 10000, 1, 0, " ", 0)
+    mpl_setup()
+    # kics = get_nth_kics("./data/table4.dat", 10001, 1, 0, " ", 0)
+    ben_kics = ["2694810"
+                , "4726114"
+                , "7272437"
+                , "11415049"
+                , "10087863"
+                , "3236788"
+                , "8041424"
+                , "8043142"
+                , "8345997"
+                , "8759594"
+                , "10122937"
+                , "3743810"
+                , "4555566"
+                , "5450764"
+                , "6038355"
+                , "6708110"
+                , "7432092"
+                , "7678238"
+                , "8804069"
+                , "9306271"
+                , "11014223"
+                , "11033434"
+                , "11873617"
+                , "12417799"
+                , "5352687"
+                , "6263983"
+                , "7433192"
+                ]
 
+    kics = get_nth_kics("./data/table4.dat", 2001, 1, 0, " ", 0)[20:23]  #[22:19:-1]
     n = new_stars(kics)
     n.get_is_variable()
+
+    # n.plot_variable_params("luminosity", "teff")
+    # plt.show()
+    # n.plot_variable_bar("periodic")
+    # plt.show()
