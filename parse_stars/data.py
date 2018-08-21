@@ -10,8 +10,10 @@ from model import model
 logger = setup_logging()
 
 from math import pi, log
-import matplotlib.pyplot as plt
 from collections import Counter
+import csv
+import matplotlib.pyplot as plt
+import numpy as np
 
 class new_stars(object):
 
@@ -39,6 +41,7 @@ class new_stars(object):
         params_arr = a.get_params(self.kics, params, **kwargs)
         for i, star in enumerate(self.res):
             star["params"].update(params_arr[i])
+        logger.info("done: %s", params)
         return 0
 
     def _check_params(self, params):
@@ -134,9 +137,7 @@ class new_stars(object):
                 self.variables.append(star["kic"])
             else:
                 self.non_variables.append(star["kic"])
-
-            print "-------------\n\tSTAR", star["kic"], label
-
+            logger.info("done: %s, %s" % (star["kic"], label))
         self.params += ["variable", "curve_fit"]
         return 0
 
@@ -160,6 +161,8 @@ class new_stars(object):
         plt.ylabel(paramy)
         plt.xlabel(paramx)
         plt.title("%s vs %s" % (paramy, paramx))
+
+        logger.info("done")
         return 0
 
     def plot_variable_bar(self, param):
@@ -188,13 +191,52 @@ class new_stars(object):
         plt.xlabel(param)
         plt.ylabel("frequency")
         plt.title("%s" % (param))
+
+        logger.info("done")
         return 0
 
-    def plot_variable_hist(self, param, binsize):
-        pass
+    def plot_variable_hist(self, param):
+        self._check_params(["variable", param])
+        non_var_xs = []
+        var_xs = []
+        for i, star in enumerate(self.res):
+            if star["kic"] in self.variables:
+                var_xs.append(star["params"][param])
+            elif star["kic"] in self.non_variables:
+                non_var_xs.append(star["params"][param])
+
+        var_xs = np.array(var_xs)
+        non_var_xs = np.array(non_var_xs)
+        var_xs = var_xs[~np.isnan(var_xs)]
+        non_var_xs = non_var_xs[~np.isnan(non_var_xs)]
+
+        if not np.any(var_xs) and not np.any(non_var_xs):
+            logger.error("no data points for this param")
+            return 1
+
+        plt.hist(var_xs, color=None, alpha=0.5, label="variable")
+        plt.hist(non_var_xs, color=None, alpha=0.5, label="non variable")
+        plt.legend(loc="upper right")
+        plt.xlabel(param)
+        plt.ylabel("frequency")
+        plt.title("%s" % (param))
+
+        logger.info("done")
+        return 0
 
     def print_params(self, fout, params):
-        pass
+        self._check_params(params)
+        header = ["kic"] + params
+        with open(fout, "w") as f:
+            w = csv.writer(f, delimiter=",", lineterminator="\n")
+            w.writerow(header)
+            for i, star in enumerate(self.res):
+                arr = [star["kic"]]
+                for param in params:
+                    arr.append(star["params"][param])
+                w.writerow(arr)
+        logger.info("done")
+        return 0
 
 if __name__ == "__main__":
     mpl_setup()
@@ -228,7 +270,14 @@ if __name__ == "__main__":
                 , "7433192"
                 ]
 
-    kics = get_nth_kics("./data/table4.dat", 40001, 1, 0, " ", 0)
+    kics = get_nth_kics("./data/table4.dat", 10001, 1, 0, " ", 0)
+
     n = new_stars(kics)
-    n.plot_variable_params("luminosity", "teff")
-    n.plot_variable_bar("periodic")
+    # n.plot_variable_params("luminosity", "teff")
+    # plt.show()
+    # n.plot_variable_bar("periodic")
+    # plt.show()
+    n.plot_variable_hist("prot")
+    plt.show()
+
+    n.print_params("./res.out", ["variable"])

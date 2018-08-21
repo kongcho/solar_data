@@ -58,7 +58,8 @@ def mpl_setup():
 # removes warning messages from kplr that is propagated to f3
 # setup logging for different modules
 def setup_logging():
-    format_str = '%(asctime)s [%(levelname)s]\t%(name)s-%(module)-10s - %(funcName)-20s: %(message)s'
+    #%(name)s
+    format_str = '%(asctime)s [%(levelname)s]\t%(module)-10s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
 
     # for stderr
@@ -72,7 +73,7 @@ def setup_logging():
 
 # setup logging for when file is being run and not imported
 def setup_main_logging():
-    format_str = '%(asctime)s [%(levelname)s]\t%(name)s-%(module)-10s - %(funcName)-20s: %(message)s'
+    format_str = '%(asctime)s [%(levelname)s]\t%(module)-10s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
 
     # for stderr

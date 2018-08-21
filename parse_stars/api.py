@@ -9,6 +9,7 @@ from mast import mast_api
 logger = settings.setup_logging()
 
 import kplr
+import numpy as np
 
 class api(object):
 
@@ -57,8 +58,8 @@ class api(object):
         self._update_params(new_params, self.get_updated_params(kics, updated_pars))
         self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
+        self._check_params_dic(new_params, periodic_pars)
         self._update_params(new_params, self.get_mast_params(kics, mast_pars))
-
         return new_params
 
     def _update_params(self, old_res, new_res):
@@ -76,25 +77,33 @@ class api(object):
                 types.append(field_type)
         return fields, types
 
+    def _check_params_dic(self, reses, params):
+        for i, res in enumerate(reses):
+            for param in params:
+                if param not in res.keys():
+                    res[param] = np.nan
+        return reses
+
     def get_updated_params(self, kics, params):
         col_name_arr, type_arr = self._format_params(settings.updated_dic, params)
         t = table_api(self.updated_dir, " ", 0, 0)
         col_nos = t.get_col_nos(col_name_arr, settings.updated_dic_keys)
         param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
+        param_res = self._check_params_dic(param_res, params)
         return param_res
 
     def get_periodic_params(self, kics, params):
         col_name_arr, type_arr = self._format_params(settings.periodic_dic, params)
-        t = table_api(self.updated_dir, ",", 1, 0)
+        t = table_api(self.periodic_dir, ",", 1, 0)
         col_nos = t.get_col_nos(col_name_arr, settings.periodic_dic_keys)
-        param_res = t.parse_table_dicts(col_nos, kics, type_arr)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
         return param_res
 
     def get_nonperiodic_params(self, kics, params):
         col_name_arr, type_arr = self._format_params(settings.nonperiodic_dic, params)
-        t = table_api(self.updated_dir, ",", 1, 0)
+        t = table_api(self.nonperiodic_dir, ",", 1, 0)
         col_nos = t.get_col_nos(col_name_arr, settings.nonperiodic_dic_keys)
-        param_res = t.parse_table_arrs(col_nos, kics, type_arr)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
         return param_res
 
     def get_periodic_or_not(self, kics):
