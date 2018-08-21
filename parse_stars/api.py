@@ -57,7 +57,7 @@ class api(object):
 
         self._update_params(new_params, self.get_updated_params(kics, updated_pars))
         self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
-        self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
+        # self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
         self._check_params_dic(new_params, periodic_pars)
         self._update_params(new_params, self.get_mast_params(kics, mast_pars))
         return new_params

@@ -270,14 +270,12 @@ if __name__ == "__main__":
                 , "7433192"
                 ]
 
-    kics = get_nth_kics("./data/table4.dat", 10001, 1, 0, " ", 0)
+    kics = get_nth_kics("./data/table4.dat", 2001, 1, 0, " ", 0)
 
     n = new_stars(kics)
-    # n.plot_variable_params("luminosity", "teff")
-    # plt.show()
-    # n.plot_variable_bar("periodic")
-    # plt.show()
+    n.plot_variable_params("luminosity", "teff")
+    plt.show()
+    n.plot_variable_bar("periodic")
+    plt.show()
     n.plot_variable_hist("prot")
     plt.show()
-
-    n.print_params("./res.out", ["variable"])
