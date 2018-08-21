@@ -22,12 +22,20 @@ def main():
     # plot_data(target)
     # plt.show()
 
-    # kics = get_nth_kics("./data/table4.dat", 40001, 1, 0, " ", 0)
+    # kics = get_nth_kics("./data/table4.dat", 80001, 1, 0, " ", 0)
     kics = get_nth_col("./data/table4.dat", 0, " ", 0)
     n = new_stars(kics)
-    n.plot_variable_params("luminosity", "teff")
-    n.plot_variable_bar("periodic")
 
+    n.plot_variable_params("luminosity", "teff")
+    plt.savefig("./lumvsteff.png")
+    plt.close("all")
+
+    n.plot_variable_bar("periodic")
+    plt.savefig("./periodic.png")
+    plt.close("all")
+
+    print "VARIABLES LEN", len(n.variables)
+    print "NON VARIABLES LEN", len(n.non_variables)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

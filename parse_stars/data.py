@@ -54,7 +54,7 @@ class new_stars(object):
 
     def _calc_luminosity(self, radius, teff):
         sb_const = float("5.670367e-08")
-        solar_lum_const = float("3.828e26")
+        solar_lum_const = float("7.942e8")
         return log(sb_const*4*pi*(radius**2)*(teff**4)/solar_lum_const, 10)
 
     def get_luminosity(self):
