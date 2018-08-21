@@ -105,11 +105,16 @@ class table_api(object):
     # function, can parse through kepler_fov_search* and table_periodic tables
     def parse_table_dicts(self, col_nos, kics=None, types=None, params=None):
         completed_kics = [False]*len(kics) if kics is not None else [False]
-        whole = [[]]*len(kics) if kics is not None else []
-        if params is None:
-            params = map(str, col_nos)
-        else:
-            params = params
+        whole = [{}]*len(kics) if kics is not None else []
+        if self.kic_col_no is not None:
+            try:
+                col_nos.remove(self.kic_col_no)
+            except:
+                pass
+            else:
+                if types is not None:
+                    del types[self.kic_col_no]
+        params = map(str, col_nos) if params is None else params
         with open(self.filename, "r") as f:
             for _ in range(self.skip_rows):
                 next(f)

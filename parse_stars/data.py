@@ -46,14 +46,16 @@ class new_stars(object):
             if param not in self.params:
                 if param == "luminosity":
                     self.get_luminosity()
-                if param == "variable":
+                elif param == "variable":
                     self.get_is_variable()
-                self.get_params([param])
+                else:
+                    self.get_params([param])
         return 0
 
     def _calc_luminosity(self, radius, teff):
         sb_const = float("5.670367e-08")
-        return log(sb_const*4*pi*(radius**2)*(teff**4))
+        solar_lum_const = float("3.828e26")
+        return log(sb_const*4*pi*(radius**2)*(teff**4)/solar_lum_const, 10)
 
     def get_luminosity(self):
         self._check_params(["teff", "rad"])
@@ -133,19 +135,9 @@ class new_stars(object):
             else:
                 self.non_variables.append(star["kic"])
 
-                m.plot_many_lines()
-                plt.show()
-                plt.close("all")
-
-            merx = max(sorted(y)[:-2])
-            minx = min(sorted(y)[1:])
             print "-------------\n\tSTAR", star["kic"], label
-            print "RANGE", merx, minx, merx-minx
 
-            # m.plot_many_lines()
-            # plt.show()
-            # plt.close("all")
-        self.params += ["variables", "curve_fit"]
+        self.params += ["variable", "curve_fit"]
         return 0
 
     def plot_variable_params(self, paramy, paramx):
@@ -161,7 +153,8 @@ class new_stars(object):
             elif star["kic"] in self.non_variables:
                 non_var_ys.append(star["params"][paramy])
                 non_var_xs.append(star["params"][paramx])
-        plt.plot(non_var_xs, non_var_ys, "bo", label="non_variable")
+
+        plt.plot(non_var_xs, non_var_ys, "bx", label="non_variable")
         plt.plot(var_xs, var_ys, "rx", label="variable")
         plt.legend(loc="upper right")
         plt.ylabel(paramy)
@@ -197,6 +190,12 @@ class new_stars(object):
         plt.title("%s" % (param))
         return 0
 
+    def plot_variable_hist(self, param, binsize):
+        pass
+
+    def print_params(self, fout, params):
+        pass
+
 if __name__ == "__main__":
     mpl_setup()
     # kics = get_nth_kics("./data/table4.dat", 10001, 1, 0, " ", 0)
@@ -229,11 +228,7 @@ if __name__ == "__main__":
                 , "7433192"
                 ]
 
-    kics = get_nth_kics("./data/table4.dat", 2001, 1, 0, " ", 0)[20:23]  #[22:19:-1]
+    kics = get_nth_kics("./data/table4.dat", 40001, 1, 0, " ", 0)
     n = new_stars(kics)
-    n.get_is_variable()
-
-    # n.plot_variable_params("luminosity", "teff")
-    # plt.show()
-    # n.plot_variable_bar("periodic")
-    # plt.show()
+    n.plot_variable_params("luminosity", "teff")
+    n.plot_variable_bar("periodic")

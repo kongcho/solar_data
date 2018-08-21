@@ -58,6 +58,7 @@ class api(object):
         self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_mast_params(kics, mast_pars))
+
         return new_params
 
     def _update_params(self, old_res, new_res):
@@ -68,37 +69,31 @@ class api(object):
     def _format_params(self, fields_dic, params):
         fields = []
         types = []
-        all_keys = fields_dic.keys()
         for param in params:
-            if param in all_keys:
+            if param in fields_dic.keys():
                 call_name, field_type = fields_dic[param]
                 fields.append(call_name)
                 types.append(field_type)
         return fields, types
 
     def get_updated_params(self, kics, params):
-        param_arr = [settings.updated_dic[par][0] for par in params]
         col_name_arr, type_arr = self._format_params(settings.updated_dic, params)
         t = table_api(self.updated_dir, " ", 0, 0)
-        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        col_nos = t.get_col_nos(col_name_arr, settings.updated_dic_keys)
         param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
         return param_res
 
     def get_periodic_params(self, kics, params):
-        param_arr = [settings.periodic_dic[par][0] for par in params \
-                     if par in settings.periodic_dic.keys()]
         col_name_arr, type_arr = self._format_params(settings.periodic_dic, params)
         t = table_api(self.updated_dir, ",", 1, 0)
-        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        col_nos = t.get_col_nos(col_name_arr, settings.periodic_dic_keys)
         param_res = t.parse_table_dicts(col_nos, kics, type_arr)
         return param_res
 
     def get_nonperiodic_params(self, kics, params):
-        param_arr = [settings.nonperiodic_dic[par][0] for par in params \
-                     if par in settings.nonperiodic_dic.keys()]
         col_name_arr, type_arr = self._format_params(settings.nonperiodic_dic, params)
         t = table_api(self.updated_dir, ",", 1, 0)
-        col_nos = t.get_col_nos(param_arr, col_name_arr)
+        col_nos = t.get_col_nos(col_name_arr, settings.nonperiodic_dic_keys)
         param_res = t.parse_table_arrs(col_nos, kics, type_arr)
         return param_res
 

@@ -1,14 +1,13 @@
 from settings import *
 from utils import *
 from aperture import run_photometry, calculate_better_aperture
+from plot import plot_data
 from data import new_stars
+
 import os
-import numpy as np
 import csv
-from plot import plot_data, print_lc_improved
+import numpy as np
 import matplotlib.pyplot as plt
-import itertools
-import kplr
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -18,20 +17,17 @@ def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    # replace_lines_fix("./tests/old.txt", "./tests/new.txt", "./tests/dat.txt")
+    # target = run_photometry("7272437", plot_flag=False)
+    # calculate_better_aperture(target, 0.001, 2, 0.7, 15)
+    # plot_data(target)
+    # plt.show()
 
-    # base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
-    #                "periodic"]
-    # param_dic = {"neighbours": [lambda x: x != []]}
-    # kics = ["757280", "757450"]
-    # n = new_stars(kics)
-    # n.get_basic_params(0.15)
-    # print n.res
+    # kics = get_nth_kics("./data/table4.dat", 40001, 1, 0, " ", 0)
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    n = new_stars(kics)
+    n.plot_variable_params("luminosity", "teff")
+    n.plot_variable_bar("periodic")
 
-    target = run_photometry("757137", plot_flag=False)
-    calculate_better_aperture(target, 0.001, 2, 0.7, 15)
-    plot_data(target)
-    plt.show()
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

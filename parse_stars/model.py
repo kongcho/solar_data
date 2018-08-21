@@ -31,7 +31,7 @@ class model(object):
 
     def make_scipy_model(self, model_func, err_func, init_arr):
         p, success = optimize.leastsq(err_func, init_arr, args=(self.x, self.y, model_func), \
-                                      maxfev=2000, xtol=0.001, ftol=0.001)
+                                      maxfev=2000)
         model = model_func(self.x, p)
         return model
 
@@ -118,15 +118,10 @@ class model(object):
         #                                             frequency=freq), 3)
 
         for freq in self._estimate_freqs(self.x, 13, 0.25):
-            for amp in np.arange(0, 0.1, 0.05):
+            for amp in np.arange(0.005, 0.1, 0.025):
                 self._setup_res("Sine1D %f %f" % (freq, amp), \
-                                # self.make_astropy_model(models.Sine1D, fitting.LevMarLSQFitter(), \
-                                #                         frequency=freq, amplitude=amp), 3)
                                 self.make_scipy_model(self._sine_model, self._simple_err_func, \
                                                       [amp, freq, 0]), 3)
-        # print len(self.reses)
-        # print self.reses[1]
-        # print self.reses[10]
         logger.info("done")
         return 0
 

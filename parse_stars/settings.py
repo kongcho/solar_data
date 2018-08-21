@@ -93,6 +93,10 @@ def setup_main_logging():
 ## Headings/types for databases to use
 
 # Mathur
+updated_dic_keys = ["KIC", "Teff", "E_Teff", "e_Teff", "log(g)", "E_log(g)", "e_log(g)", \
+                    "[Fe/H]", "E_[Fe/H]", "e_[Fe/H]", "Rad", "E_Rad", "e_rad", \
+                    "Mass", "E_Mass", "e_Mass", "rho", "E_rho", "e_rho",
+                    "Dist", "E_Dist", "e_Dist", "Av", "E_Av", "e_Av", "Mod"]
 updated_dic = {
     "kic": ("KIC", int),
     "teff": ("Teff", int), # Effective temperature; output
@@ -123,6 +127,8 @@ updated_dic = {
 }
 
 # McQuillian
+periodic_dic_keys = ["KID", "Teff", "logg", "Mass", "Prot", "Prot_err", "Rper", \
+                     "LPH", "w", "DC", "Flag"]
 periodic_dic = {
     "KID": ("KID", int),
     "Teff": ("Teff", int), # K, Dressing & Charbonneau
@@ -138,6 +144,7 @@ periodic_dic = {
 }
 
 # McQuillian
+nonperiodic_dic_keys = ["KID", "Teff", "logg", "Mass", "Prot", "Prot_err", "LPH", "w", "DC"]
 nonperiodic_dic = {
     "KID": ("KID", int),
     "Teff": ("Teff", int),
