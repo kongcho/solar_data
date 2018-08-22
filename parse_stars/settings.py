@@ -59,7 +59,7 @@ def mpl_setup():
 # setup logging for different modules
 def setup_logging():
     #%(name)s
-    format_str = '%(asctime)s [%(levelname)s]\t%(module)-10s - %(funcName)-20s: %(message)s'
+    format_str = '%(asctime)s [%(levelname)s]\t%(module)-6s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
 
     # for stderr
@@ -73,7 +73,7 @@ def setup_logging():
 
 # setup logging for when file is being run and not imported
 def setup_main_logging():
-    format_str = '%(asctime)s [%(levelname)s]\t%(module)-10s - %(funcName)-20s: %(message)s'
+    format_str = '%(asctime)s [%(levelname)s]\t%(module)-6s - %(funcName)-20s: %(message)s'
     formatter = logging.Formatter(format_str)
 
     # for stderr
