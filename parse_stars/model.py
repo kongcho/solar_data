@@ -78,7 +78,7 @@ class model(object):
         return np.divide(np.square(self.y-model).sum(), len(model)-1)
 
     def _get_bic(self, model, k):
-        return len(model)*np.log10(self._get_ssr(model)) + k*np.log10(len(model))
+        return len(model)*np.log(self._get_ssr(model)) + k*np.log(len(model))
 
     def _determine_accuracy(self, res):
         label, model, k = res
@@ -124,6 +124,27 @@ class model(object):
                                                       [amp, freq, 0]), 3)
         logger.info("done")
         return 0
+
+    def run_model(self, label):
+        model = []
+        k = 1
+        if label == "Const1D":
+            model = self.make_astropy_model(models.Const1D, fitting.LinearLSQFitter())
+            k = 1
+        if label == "Linear1D":
+            model = self.make_astropy_model(models.Linear1D, fitting.LinearLSQFitter())
+            k = 2
+        if label == "Parabola1D":
+            model = self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), 2)
+            k = 3
+        else:
+            labels = label.split(" ")
+            if labels[0] == "Sine1D":
+                freq = float(labels[1])
+                amp = float(labels[2])
+                model = self.make_scipy_model(self._sine_model, self._simple_err_func, [amp, freq, 0])
+                k = 3
+        return self._get_ssr(model), self._get_bic(model, k)
 
     def is_variable(self):
         self.run_through_models()

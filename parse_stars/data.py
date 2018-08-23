@@ -14,7 +14,7 @@ from collections import Counter
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
-import sklearn as skl
+# import sklearn as skl
 
 class new_stars(object):
 
