@@ -132,15 +132,17 @@ class new_stars(object):
         for i, star in enumerate(self.res):
             y, x, yerr = self._setup_lcs_xys(star)
             m = model(y, x, yerr=yerr, qs=star["params"]["qs"])
-            res, label = m.is_variable()
+            res, label, bic, ssr = m.is_variable()
             star["params"]["variable"] = res
             star["params"]["curve_fit"] = label
+            star["params"]["var_bic"] = bic
+            star["params"]["var_chi2"] = ssr
             if res:
                 self.variables.append(star["kic"])
             else:
                 self.non_variables.append(star["kic"])
             logger.info("done: %s, %s" % (star["kic"], label))
-        self.params += ["variable", "curve_fit"]
+        self.params += ["variable", "curve_fit", "var_bic", "var_chi2"]
         return 0
 
     def setup_self_variable(self):

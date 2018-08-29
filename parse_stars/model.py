@@ -18,7 +18,6 @@ class model(object):
         self.y = y[self.index]
         self.xerr = np.array(xerr)[self.index] if xerr else xerr
         self.yerr = np.array(yerr)[self.index] if yerr else yerr
-        qs = None
         if qs:
             self.qs = np.array(qs)[self.index]
             self.fmts = self._setup_fmts(qs)[self.index] if not fmts else np.array(fmts)
@@ -64,11 +63,11 @@ class model(object):
     def plot_many_lines(self, **kwargs):
         fig = plt.figure(figsize=(10, 5))
 
-        if np.any(self.fmts):
+        if self.fmts is None:
+            plt.errorbar(self.x, self.y, yerr=self.yerr, fmt="k+")
+        else:
             for i in range(len(self.x)):
                 plt.errorbar(self.x[i], self.y[i], yerr=self.yerr[i], fmt=self.fmts[i])
-        else:
-            plt.errorbar(self.x, self.y, yerr=self.yerr, fmt="k+")
         plt.xlabel("Time")
         plt.ylabel("Flux")
 
@@ -103,10 +102,12 @@ class model(object):
 
     def _get_bic(self, model, k):
         ssr = self._get_ssr(model, self.y, self.yerr)
-        return np.nansum(ssr) + k*np.log(len(model))
+        bic = np.nansum(ssr) + k*np.log(len(model))
+        return bic, np.nansum(ssr)
 
     def _determine_accuracy(self, res):
         label, model, k = res
+        # print label
         return self._get_bic(model, k)
 
     def _get_jitter_grid(self, model, gs):
@@ -137,13 +138,21 @@ class model(object):
             new_err = np.sqrt(self.yerr[gs]**2 + jitter**2)
             self.yerr[gs] = [err if not np.isnan(err) else self.yerr[gs[i]] \
                              for i, err in enumerate(new_err)]
+        # print "NEW SSR", np.nansum(self._get_ssr(model, self.y, self.yerr))
         return 0
 
     def _get_best_accuracies(self):
-        accs = [self._determine_accuracy(res) for res in self.reses]
-        best_i = np.argmin(accs)
+        bics = []
+        ssrs = []
+        for res in self.reses:
+            bic, ssr = self._determine_accuracy(res)
+            bics.append(bic)
+            ssrs.append(ssr)
+        best_i = np.argmin(bics)
+        best_bic = bics[best_i]
+        best_ssr = ssrs[best_i]
         best_lab = self.reses[best_i][0]
-        return best_i, best_lab
+        return best_i, best_lab, best_bic, best_ssr
 
     def _estimate_freqs(self, times, max_years=13, times_per_year=0.15):
         qt_factor = np.ptp(times)/(18*90)
@@ -170,9 +179,9 @@ class model(object):
                         self.make_astropy_model(models.Const1D, fitting.LinearLSQFitter()), 1)
         self._setup_res("Linear1D", \
                         self.make_astropy_model(models.Linear1D, fitting.LinearLSQFitter()), 2)
-        self._setup_res("Parabola1D", \
-                        self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), 2),\
-                        3)
+        # self._setup_res("Parabola1D", \
+        #                 self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), 2),\
+        #                 3)
 
         # damped_sine_inits = [0.01, 0.001, 0.001, 0]
         # self._setup_res("DampedSine", \
@@ -217,12 +226,12 @@ class model(object):
         self.run_through_models()
 
         self.fix_errors()
-        best_i, best_lab = self._get_best_accuracies()
+        best_i, best_lab, best_bic, best_ssr = self._get_best_accuracies()
 
         bools = [not best_lab == "Const1D"]
         result = all(bools)
         logger.info("done: %s, %s" % (result, best_lab))
-        return result, best_lab
+        return result, best_lab, best_bic, best_ssr
 
 def main():
     return 0
