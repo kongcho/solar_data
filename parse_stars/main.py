@@ -83,44 +83,28 @@ def output(n, tot):
     start = int(n/float(tot)*l)
     end = int((n+1)/float(tot)*l)
     kics = all_kics[start:end]
-    kics = all_kics[:1]
-    ns = new_stars(kics)
-    ns.print_params(fout, params)
+    print start, end
+    # ns = new_stars(kics)
+    # ns.print_params(fout, params)
     print "-------------------- OUTPUT %d DONE" % n
     return 0
 
-def output_0(n, tot):
-    output(n, tot)
-def output_1(n, tot):
-    output(n, tot)
-def output_2(n, tot):
-    output(n, tot)
-def output_3(n, tot):
-    output(n, tot)
-def output_4(n, tot):
-    output(n, tot)
-def output_5(n, tot):
-    output(n, tot)
-def output_6(n, tot):
-    output(n, tot)
-def output_7(n, tot):
-    output(n, tot)
-def output_8(n, tot):
-    output(n, tot)
-def output_9(n, tot):
-    output(n, tot)
-
 def run_mult(n, func):
-    from multiprocessing import Process
-    import sys
+    import multiprocessing
 
     orig = func.__name__
 
+    jobs = []
     for i in range(n):
-        func.__name__ = orig + ("_%d" % i)
-        f_str = func.__name__
-        f = globals()[f_str]
-        f(i, n)
+        out_list = list()
+        process = multiprocessing.Process(target=output, args=(i, n))
+        jobs.append(process)
+
+    for j in jobs:
+        j.start()
+
+    for j in jobs:
+        j.join()
 
     return 0
 
