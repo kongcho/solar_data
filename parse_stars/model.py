@@ -10,12 +10,31 @@ from astropy.modeling import models, fitting
 from scipy import optimize
 
 class model(object):
-    def __init__(self, y, x, yerr=None, xerr=None):
-        self.x = np.array(x)
-        self.y = np.array(y)
-        self.yerr = np.array(yerr)
-        self.xerr = np.array(xerr)
+    def __init__(self, y, x, yerr=None, xerr=None, qs=None, fmts=None):
+        x = np.array(x)
+        y = np.array(y)
+        self.index = ~(np.isnan(y))
+        self.x = x[self.index]
+        self.y = y[self.index]
+        self.xerr = np.array(xerr)[self.index] if xerr else xerr
+        self.yerr = np.array(yerr)[self.index] if yerr else yerr
+        qs = None
+        if qs:
+            self.qs = np.array(qs)[self.index]
+            self.fmts = self._setup_fmts(qs)[self.index] if not fmts else np.array(fmts)
+        else:
+            self.qs = qs
+            self.fmts = None
         self.reses = []
+
+    def _setup_fmts(self, qs):
+        fmt = ['ko', 'rD', 'b^', 'gs']
+        fmts = []
+        for q in qs:
+            for i in range(4):
+                if q == i:
+                    fmts.append(fmt[i])
+        return np.array(fmts)
 
     def _damped_sine_model(self, x, inits):
         return inits[0]*np.exp(-1*inits[1]*x)*np.sin(2*np.pi*inits[2]*x + inits[3])
@@ -42,47 +61,92 @@ class model(object):
         model = m(self.x)
         return model
 
-    def plot_many_lines(self):
+    def plot_many_lines(self, **kwargs):
         fig = plt.figure(figsize=(10, 5))
-        plt.errorbar(self.x, self.y, yerr=self.yerr, fmt='k+')
+
+        if np.any(self.fmts):
+            for i in range(len(self.x)):
+                plt.errorbar(self.x[i], self.y[i], yerr=self.yerr[i], fmt=self.fmts[i])
+        else:
+            plt.errorbar(self.x, self.y, yerr=self.yerr, fmt="k+")
         plt.xlabel("Time")
         plt.ylabel("Flux")
 
         for i, res in enumerate(self.reses):
             label, model, k = res
-            plt.plot(self.x, model, label=label, linewidth=0.5)
+            plt.plot(self.x, model, label=label, linewidth=0.5, **kwargs)
 
-        plt.legend(loc=2)
+        plt.legend(loc="upper right")
         logger.info("done: %d models" % len(self.reses))
         return fig
 
-    def plot_many_plots(self):
+    def plot_many_plots(self, **kwargs):
         n = len(self.reses)
         size = (n*3, 4)
         fig, axes = plt.subplots(1, n+1, figsize=size, sharex=True, sharey=True)
         ax = axes.ravel()
 
-        ax[0].plot(self.x, self.y, 'k+')
+        ax[0].plot(self.x, self.y, 'k+', **kwargs)
         ax[0].set_title("Original")
 
         for i, res in enumerate(self.reses, 1):
             label, model, k = res
-            ax[i].plot(self.x, model, label=label)
+            ax[i].plot(self.x, model, label=label, fmt='k+', **kwargs)
             ax[i].set_title(label)
             # ax[i].axis('off')
 
         logger.info("done: %d models" % n)
         return fig
 
-    def _get_ssr(self, model):
-        return np.divide(np.square(self.y-model).sum(), len(model)-1)
+    def _get_ssr(self, model, data, err):
+        return np.square(np.divide(model-data, err))
 
     def _get_bic(self, model, k):
-        return len(model)*np.log(self._get_ssr(model)) + k*np.log(len(model))
+        ssr = self._get_ssr(model, self.y, self.yerr)
+        return np.nansum(ssr) + k*np.log(len(model))
 
     def _determine_accuracy(self, res):
         label, model, k = res
         return self._get_bic(model, k)
+
+    def _get_jitter_grid(self, model, gs):
+        n = np.array(len(gs))
+        is_first = True
+        for j in np.arange(0, 0.01, 0.0001):
+            s = np.sqrt(self.yerr[gs]**2 + j**2)
+            ssr = np.sum(self._get_ssr(model[gs], self.y[gs], s))
+            d = np.abs(ssr - n)
+            if is_first:
+                best_j = j
+                best_d = d
+                is_first = False
+            if d < best_d:
+                best_j = j
+                best_d = d
+        return best_j
+
+    def fix_errors(self):
+        ssrs = [np.nansum(self._get_ssr(res[1], self.y, self.yerr)) for res in self.reses]
+        ssrs = [np.nan if ssr == 0.0 else ssr for ssr in ssrs]
+        best_i = np.nanargmin(ssrs) if not np.all(np.isnan(ssrs)) else np.argmin(ssrs)
+        model = self.reses[best_i][1]
+        ran = 4 if np.any(self.qs) else 1
+        for i in range(ran):
+            gs = np.where(np.array(self.qs) == i)[0]
+            jitter = self._get_jitter_grid(model, gs)
+            print "JITTER", jitter
+            new_err = np.sqrt(self.yerr[gs]**2 + jitter**2)
+            self.yerr[gs] = [err if not np.isnan(err) else self.yerr[gs[i]] \
+                             for i, err in enumerate(new_err)]
+            print "CHI2222", len(gs), np.sum(self._get_ssr(model[gs], self.y[gs], self.yerr[gs]))
+        print "SSRRRRRRRRRRRRRR", len(self.y), np.sum(self._get_ssr(model, self.y, self.yerr))
+        return 0
+
+    def _get_best_accuracies(self):
+        accs = [self._determine_accuracy(res) for res in self.reses]
+        best_i = np.argmin(accs)
+        best_lab = self.reses[best_i][0]
+        return best_i, best_lab
 
     def _estimate_freqs(self, times, max_years=13, times_per_year=0.15):
         qt_factor = np.ptp(times)/(18*90)
@@ -93,6 +157,12 @@ class model(object):
         filtered_is = np.isposinf(good_freqs)
         good_freqs = good_freqs[np.logical_not(filtered_is)]
         return good_freqs
+
+    def _estimate_amps(self, ys, n):
+        min_val = 0.0005
+        max_ys = np.nanmax(np.abs(ys))
+        range_ys = max_ys - min_val
+        return np.arange(min_val, max_ys, range_ys/n)
 
     def _setup_res(self, label, model_res, k_params):
         self.reses.append((label, model_res, k_params))
@@ -118,7 +188,7 @@ class model(object):
         #                                             frequency=freq), 3)
 
         for freq in self._estimate_freqs(self.x, 13, 0.25):
-            for amp in np.arange(0.005, 0.1, 0.025):
+            for amp in self._estimate_amps(self.y, 5):
                 self._setup_res("Sine1D %f %f" % (freq, amp), \
                                 self.make_scipy_model(self._sine_model, self._simple_err_func, \
                                                       [amp, freq, 0]), 3)
@@ -149,13 +219,13 @@ class model(object):
     def is_variable(self):
         self.run_through_models()
 
-        accs = [self._determine_accuracy(res) for res in self.reses]
-        best_i = np.argmin(accs)
-        best_lab = self.reses[best_i][0]
+        self.fix_errors()
+        best_i, best_lab = self._get_best_accuracies()
 
         bools = [not best_lab == "Const1D"]
         result = all(bools)
         logger.info("done: %s, %s" % (result, best_lab))
+        print result, best_lab, "------------------------\n"
         return result, best_lab
 
 def main():

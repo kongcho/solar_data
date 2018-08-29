@@ -14,7 +14,6 @@ from collections import Counter
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
-# import sklearn as skl
 
 class new_stars(object):
 
@@ -52,6 +51,8 @@ class new_stars(object):
                     self.get_luminosity()
                 elif param == "variable":
                     self.get_is_variable()
+                    # self.get_params([param])
+                    # self.setup_self_variable()
                 else:
                     self.get_params([param])
         return 0
@@ -71,7 +72,7 @@ class new_stars(object):
 
     def get_basic_params(self, neighbour_arcsep=0.15):
         base_params = ["teff", "logg", "metallicity", "rad", "mass" "rho", "dist", "av", \
-                       "prot", "rper", "periodic", "neighbours", "close_edges"]
+                       "prot", "rper", "periodic", "neighbors", "close_edges"]
         self.get_params(base_params, radius=neighbour_arcsep)
         return 0
 
@@ -105,13 +106,6 @@ class new_stars(object):
             self.res = res
         return res
 
-    def _build_errorbars(self, x, err, qs):
-        error_list = np.zeros_like(x)
-        for i in range(len(err)):
-            g = np.where(qs == i)[0]
-            error_list[g] += err[i]
-        return 0
-
     def _setup_lcs_xys(self, star):
         star_pars = star["params"]
         y_dat = star_pars["lcs"]
@@ -124,13 +118,20 @@ class new_stars(object):
         x = [x_dat[i] for i in good_idxs]
         return y, x, yerr
 
+    def _build_errorbars(self, x, err, qs):
+        error_list = np.zeros_like(x)
+        for i in range(len(err)):
+            g = np.where(qs == i)[0]
+            error_list[g] += err[i]
+        return 0
+
     def get_is_variable(self):
         self.variables = []
         self.non_variables = []
         self._check_params(["lcs_new", "lcs_qs"])
         for i, star in enumerate(self.res):
             y, x, yerr = self._setup_lcs_xys(star)
-            m = model(y, x, yerr=yerr)
+            m = model(y, x, yerr=yerr, qs=star["params"]["qs"])
             res, label = m.is_variable()
             star["params"]["variable"] = res
             star["params"]["curve_fit"] = label
@@ -140,6 +141,17 @@ class new_stars(object):
                 self.non_variables.append(star["kic"])
             logger.info("done: %s, %s" % (star["kic"], label))
         self.params += ["variable", "curve_fit"]
+        return 0
+
+    def setup_self_variable(self):
+        self._check_params(["variable"])
+        self.variables = []
+        self.non_variables = []
+        for i, star in enumerate(self.res):
+            if star["params"]["variable"]:
+                self.variables.append(star["kic"])
+            else:
+                self.non_variables.append(star["kic"])
         return 0
 
     def plot_variable_params(self, paramy, paramx):
@@ -215,8 +227,8 @@ class new_stars(object):
             logger.error("no data points for this param")
             return 1
 
-        plt.hist(var_xs, color=None, alpha=0.5, label="variable")
-        plt.hist(non_var_xs, color=None, alpha=0.5, label="non variable")
+        plt.hist(var_xs, color=["r"], alpha=0.5, label="variable")
+        plt.hist(non_var_xs, color=["b"], alpha=0.5, label="non variable")
         plt.legend(loc="upper right")
         plt.xlabel(param)
         plt.ylabel("frequency")
@@ -239,44 +251,35 @@ class new_stars(object):
         logger.info("done")
         return 0
 
+    def _setup_logreg(self, params):
+        import sklearn as skl
+        from sklearn.feature_selection import RFE
+        from sklearn.cross_validation import train_test_split
+        from sklearn.linear_model import LogisticRegression
+        from sklearn import metrics
+
+        self._check_params(["variable"])
+        features = ["metallicity", "prot", "teff", "av"]
+        self._check_params(features)
+
+        variables = []
+        data = []
+        for i, star in enumerate(self.res):
+            pars = star["params"]
+            relevant_pars = [pars[par] for par in features]
+            data.append(relevant_pars)
+            variables.append(pars["variable"])
+
+        print variables
+        print data
+
+    def do_logreg(self, params):
+        pass
+
 if __name__ == "__main__":
     mpl_setup()
-    # kics = get_nth_kics("./data/table4.dat", 10001, 1, 0, " ", 0)
-    ben_kics = ["2694810"
-                , "4726114"
-                , "7272437"
-                , "11415049"
-                , "10087863"
-                , "3236788"
-                , "8041424"
-                , "8043142"
-                , "8345997"
-                , "8759594"
-                , "10122937"
-                , "3743810"
-                , "4555566"
-                , "5450764"
-                , "6038355"
-                , "6708110"
-                , "7432092"
-                , "7678238"
-                , "8804069"
-                , "9306271"
-                , "11014223"
-                , "11033434"
-                , "11873617"
-                , "12417799"
-                , "5352687"
-                , "6263983"
-                , "7433192"
-                ]
 
-    kics = get_nth_kics("./data/table4.dat", 2001, 1, 0, " ", 0)
+    kics = get_nth_kics("./data/table4.dat", 80001, 1, 0, " ", 0)
 
     n = new_stars(kics)
-    n.plot_variable_params("luminosity", "teff")
-    plt.show()
-    n.plot_variable_bar("periodic")
-    plt.show()
-    n.plot_variable_hist("prot")
-    plt.show()
+    n._setup_logreg([])

@@ -11,9 +11,10 @@ import csv
 
 class table_api(object):
 
-    def __init__(self, table_file, delimiter=",", skip_rows=0, kic_col_no=None):
+    def __init__(self, table_file, delimiter=",", skip_rows=0, kic_col_no=None, lineend=""):
         self.filename = table_file
         self.delimiter = delimiter
+        self.lineend = lineend
         self.skip_rows = skip_rows
         self.kic_col_no = kic_col_no
 
@@ -25,6 +26,7 @@ class table_api(object):
                 next(f)
             reader = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             for row in reader:
+                row[-1] = row[-1].strip(self.lineend)
                 arr.append(row[n])
             if col_type is not None:
                 try:
@@ -40,6 +42,7 @@ class table_api(object):
                 next(f)
             reader = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             arr = next(reader)
+            arr[-1] = arr[-1].strip(self.lineend)
         if types is not None:
             for i, col_type in enumerate(types):
                 try:
@@ -51,16 +54,17 @@ class table_api(object):
     # function, gets columns indexes of given param names to parse table by column number
     def get_col_nos(self, params, field_names):
         col_nos = []
-        for i, field in enumerate(field_names):
-            if field in params:
-                col_nos.append(i)
+        for par in params:
+            for i, field in enumerate(field_names):
+                if field == par:
+                    col_nos.append(i)
         return col_nos
 
     def get_col_nos_table(self, row_index, params):
         with open(self.filename, "r") as f:
             for _ in range(row_index):
                 next(f)
-            line = next(f)
+            line = next(f).strip(self.lineend)
         field_names = [x.strip() for x in line.split(self.delimiter)]
         return self.get_col_nos(params, field_names)
 
@@ -80,6 +84,7 @@ class table_api(object):
                 next(f)
             r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             for i, row in enumerate(r):
+                row[-1] = row[-1].strip(self.lineend)
                 if all(completed_kics):
                     return whole
                 if kics is not None:
@@ -120,6 +125,7 @@ class table_api(object):
                 next(f)
             r = csv.reader(f, delimiter=self.delimiter, skipinitialspace=True)
             for i, row in enumerate(r):
+                row[-1] = row[-1].strip(self.lineend)
                 if all(completed_kics):
                     return whole
                 if kics is not None:

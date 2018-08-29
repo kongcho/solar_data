@@ -16,12 +16,15 @@ ffidata_folder = "./ffidata/"
 ## Input Files to change
 filename_periods = "./data/Table_Periodic.txt"
 filename_nonperiods = "./data/Table_Non_Periodic.txt"
-filename_stellar_params = "./data/table4.dat" #KIC = 0, Teff, logg, Fe/H
+filename_stellar_params = "./data/table4.dat"
 filename_mast_table = "./data/kepler_fov_search_all.txt"
+filename_gaia_table = "./data/DR2PapTable1.txt"
 kepmag_file_prefix = "./data/kepler_fov_search"
+
 filename_lc_img = "./results/lc_data_img.out"
 filename_lc_new = "./results/lc_data_new.out"
 filename_lc_old = "./results/lc_data_old.out"
+filename_lc_var = "./results/lc_data_var.out"
 filename_lc_obs = "./data/obs_info.txt"
 
 ## Output Files to change
@@ -125,6 +128,24 @@ updated_dic = {
     "E_Av": ("E_Av", float), # Upper 1{sigma} confidence interval
     "e_Av": ("e_Av", float), # Lower 1{sigma} confidence interval
     "mod": ("Mod", str) # Provenance of output values
+}
+
+gaia_dic_keys = ["KIC", "source_id", "teff", "teffe", "dis", "disep", "disem", \
+                 "rad", "radep", "radem", "avs", "evState", "binaryFlag"]
+gaia_dic = {
+    "KIC": ("KIC", int),
+    "source_id": ("source_id", int),
+    "teff": ("teff", int),
+    "teffe": ("teffe", int),
+    "dist": ("dis", float),
+    "disep": ("disep", float),
+    "disem": ("disem", float),
+    "rad": ("rad", float),
+    "radep": ("radep", float),
+    "radem": ("radem", float),
+    "avs": ("avs", float),
+    "evState": ("evState", int), # evolutionary state
+    "binary": ("binaryFlag", int) # binarity
 }
 
 # McQuillian

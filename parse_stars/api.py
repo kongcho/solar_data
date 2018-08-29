@@ -20,29 +20,30 @@ class api(object):
         self.nonperiodic_dir = settings.filename_nonperiods
         self.periodic_dir = settings.filename_periods
         self.mast_table_dir = settings.filename_mast_table
+        self.gaia_dir = settings.filename_gaia_table
         self.lc_img_dir = settings.filename_lc_img
         self.lc_new_dir = settings.filename_lc_new
         self.lc_old_dir = settings.filename_lc_old
         self.lc_obs_dir = settings.filename_lc_obs
+        self.lc_var_dir = settings.filename_lc_var
 
     def get_params(self, kics, params, **neighbour_filters):
         new_params = [{} for _ in kics]
-        updated_params = ["teff", "logg", "metallicity", "rad", "mass", "rho", "dist", "av"]
-        updated_pars, periodic_pars, mast_pars, mast_table_pars = ([] for _ in range(4))
+        gaia_pars, updated_pars, periodic_pars, mast_pars, mast_table_pars = ([] for _ in range(5))
 
         for param in params:
-            if param in updated_params:
+            if param in settings.gaia_dic_keys:
+                gaia_pars.append(param)
+            elif param in settings.updated_dic_keys:
                 updated_pars.append(param)
-            elif param in settings.updated_dic.keys():
-                updated_pars.append(param)
-            elif param in settings.periodic_dic.keys():
+            elif param in settings.periodic_dic_keys:
                 periodic_pars.append(param)
             elif param in settings.mast_params:
                 mast_pars.append(param)
 
         if "periodic" in params:
             self._update_params(new_params, self.get_periodic_or_not(kics))
-        if "neighbours" in params:
+        if "neighbors" in params:
             self._update_params(new_params, self.get_neighbours_or_not(kics, **neighbour_filters))
         if "lcs_new" in params:
             self._update_params(new_params, self.get_lcs_times_uncerts(kics, self.lc_new_dir))
@@ -54,12 +55,19 @@ class api(object):
             self._update_params(new_params, self.get_lcs_qs(kics, self.lc_obs_dir))
         if "close_edges" in params:
             self._update_params(new_params, self.get_close_edges(kics))
+        if "variable" in params:
+            self._update_params(new_params, self.get_variable(kics, self.lc_var_dir))
 
-        self._update_params(new_params, self.get_updated_params(kics, updated_pars))
-        self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
+        try:
+            self._update_params(new_params, self.get_mast_params(kics, mast_pars))
+        except Exception as e:
+            logger.error("can't retrieve mast params: %s-%s" % (e.message, mast_pars))
         # self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
+        self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
         self._check_params_dic(new_params, periodic_pars)
-        self._update_params(new_params, self.get_mast_params(kics, mast_pars))
+        self._update_params(new_params, self.get_updated_params(kics, updated_pars))
+        self._update_params(new_params, self.get_gaia_params(kics, gaia_pars))
+        self._check_params_dic(new_params, gaia_pars)
         return new_params
 
     def _update_params(self, old_res, new_res):
@@ -83,6 +91,14 @@ class api(object):
                 if param not in res.keys():
                     res[param] = np.nan
         return reses
+
+    def get_gaia_params(self, kics, params):
+        col_name_arr, type_arr = self._format_params(settings.gaia_dic, params)
+        t = table_api(self.gaia_dir, "&", 1, 0, "\\")
+        col_nos = t.get_col_nos(col_name_arr, settings.gaia_dic_keys)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
+        param_res = self._check_params_dic(param_res, params)
+        return param_res
 
     def get_updated_params(self, kics, params):
         col_name_arr, type_arr = self._format_params(settings.updated_dic, params)
@@ -113,11 +129,11 @@ class api(object):
         for kic in kics:
             curr_params = {}
             if kic in periodic:
-                curr_params["periodic"] = True
+                curr_params["periodic"] = 1 # True
             elif kic in unperiodics:
-                curr_params["periodic"] = False
+                curr_params["periodic"] = 0 # False
             else:
-                curr_params["periodic"] = "Unsure"
+                curr_params["periodic"] = 2 # Unsure
             reses.append(curr_params)
         return reses
 
@@ -146,7 +162,7 @@ class api(object):
             for i in res:
                 if i["Kepler ID"] != kic:
                     neighbours.append(i["Kepler ID"])
-            curr_params["neighbours"] = neighbours
+            curr_params["neighbors"] = neighbours
             reses.append(curr_params)
         return reses
 
@@ -157,17 +173,20 @@ class api(object):
         mast_reses = self.get_mast_params(kics, keys)
         for res in mast_reses:
             curr_params = {}
-            curr_params["close_edges"] = []
+            edges = []
             rows = [res[k] if res[k] is not None else np.nan for k in rows_ks]
             cols = [res[k] if res[k] is not None else np.nan for k in cols_ks]
             if np.nanmin(rows) <= min_distance:
-                curr_params["close_edges"].append("Top")
+                edges.append("Top")
             elif abs(shape[0]-np.nanmax(rows)) <= min_distance:
-                curr_params["close_edges"].append("Bottom")
+                edges.append("Bottom")
             if np.nanmin(cols) <= min_distance:
-                curr_params["close_edges"].append("Left")
+                edges.append("Left")
             elif abs(shape[0]-np.nanmax(rows)) <= min_distance:
-                curr_params["close_edges"].append("Right")
+                edges.append("Right")
+            if not edges:
+                edges.append(None)
+            curr_params["close_edges"] = edges
             reses.append(curr_params)
         return reses
 
@@ -175,12 +194,12 @@ class api(object):
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
         arrs = t.parse_table_arrs(range(1, 109), kics=kics, types=[float]*108)
         reses = []
-        for i, res in enumerate(kics):
+        for i, kic in enumerate(kics):
             curr_params = {}
             arr = arrs[i]
             if len(arr) == 0:
                 curr_params["lcs"], curr_params["flux_uncert"], \
-                    curr_params["target_uncert"], curr_params["times"] = (None for _ in range(4))
+                    curr_params["target_uncert"], curr_params["times"] = (np.nan for _ in range(4))
                 logger.error("couldn't parse table for this kic: %s" % kic)
             else:
                 curr_params["lcs"] = arr[:52]
@@ -194,7 +213,7 @@ class api(object):
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
         arrs = t.parse_table_arrs(range(1, 902), kics=kics, types=[float]*902)
         reses = []
-        for i, res in enumerate(kics):
+        for i, kic in enumerate(kics):
             curr_params = {}
             arr = arrs[i]
             if len(arr) == 0:
@@ -212,6 +231,25 @@ class api(object):
         years = t.get_nth_col(2, int)
         curr_params = {"qs": qs, "years": years} # same pointer, unchanged data
         reses = [curr_params]*len(kics)
+        return reses
+
+    def get_variable(self, kics, lc_file):
+        t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
+        arrs = t.parse_table_arrs(range(1, 3), kics=kics, types=[str, str, float, float])
+        reses = []
+        for i, kic in enumerate(kics):
+            curr_params = {}
+            arr = arrs[i]
+            if len(arr) == 0:
+                curr_params["variable"], curr_params["var_fit"], \
+                    curr_params["var_ssr"], curr_params["var_bic"] = (np.nan for _ in range(4))
+                logger.error("couldn't parse table for this kic: %s" % kic)
+            else:
+                curr_params["variable"] = 1 if arr[0] == "True" else 0
+                curr_params["var_fit"] = arr[1]
+                # curr_params["var_ssr"] = arr[2]
+                # curr_params["var_bic"] = arr[3]
+            reses.append(curr_params)
         return reses
 
 if __name__ == "__main__":
