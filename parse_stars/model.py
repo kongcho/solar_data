@@ -134,12 +134,9 @@ class model(object):
         for i in range(ran):
             gs = np.where(np.array(self.qs) == i)[0]
             jitter = self._get_jitter_grid(model, gs)
-            print "JITTER", jitter
             new_err = np.sqrt(self.yerr[gs]**2 + jitter**2)
             self.yerr[gs] = [err if not np.isnan(err) else self.yerr[gs[i]] \
                              for i, err in enumerate(new_err)]
-            print "CHI2222", len(gs), np.sum(self._get_ssr(model[gs], self.y[gs], self.yerr[gs]))
-        print "SSRRRRRRRRRRRRRR", len(self.y), np.sum(self._get_ssr(model, self.y, self.yerr))
         return 0
 
     def _get_best_accuracies(self):
@@ -225,7 +222,6 @@ class model(object):
         bools = [not best_lab == "Const1D"]
         result = all(bools)
         logger.info("done: %s, %s" % (result, best_lab))
-        print result, best_lab, "------------------------\n"
         return result, best_lab
 
 def main():
