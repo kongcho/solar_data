@@ -11,21 +11,21 @@ f3_location = "./f3"
 results_folder = "./results/"
 output_folder = "./tests/"
 ffidata_folder = "./ffidata/"
-
+data_folder = "./data/"
 
 ## Input Files to change
-filename_periods = "./data/Table_Periodic.txt"
-filename_nonperiods = "./data/Table_Non_Periodic.txt"
-filename_stellar_params = "./data/table4.dat"
-filename_mast_table = "./data/kepler_fov_search_all.txt"
-filename_gaia_table = "./data/DR2PapTable1.txt"
-kepmag_file_prefix = "./data/kepler_fov_search"
+filename_periods = data_folder + "Table_Periodic.txt"
+filename_nonperiods = data_folder + "Table_Non_Periodic.txt"
+filename_stellar_params = data_folder + "table4.dat"
+filename_mast_table = data_folder + "kepler_fov_search_all.txt"
+filename_gaia_table = data_folder + "DR2PapTable1.txt"
+kepmag_file_prefix = data_folder + "kepler_fov_search"
 
-filename_lc_img = "./results/lc_data_img.out"
-filename_lc_new = "./results/lc_data_new.out"
-filename_lc_old = "./results/lc_data_old.out"
-filename_lc_var = "./results/lc_data_var.out"
-filename_lc_obs = "./data/obs_info.txt"
+filename_lc_img = results_folder + "lc_data_img.out"
+filename_lc_new = results_folder + "lc_data_new.out"
+filename_lc_old = results_folder + "lc_data_old.out"
+filename_lc_var = results_folder + "lc_data_var.out"
+filename_lc_obs = data_folder + "obs_info.txt"
 
 ## Output Files to change
 file_name = "good_kids"

@@ -16,8 +16,18 @@ class model(object):
         self.index = ~(np.isnan(y))
         self.x = x[self.index]
         self.y = y[self.index]
-        self.xerr = np.array(xerr)[self.index] if xerr else xerr
-        self.yerr = np.array(yerr)[self.index] if yerr else yerr
+        if xerr:
+            new_xerr = np.array(xerr)[self.index]
+            new_xerr[np.isnan(new_xerr)] = 0
+            self.xerr = new_xerr
+        else:
+            self.xerr = xerr
+        if yerr:
+            new_yerr = np.array(yerr)[self.index]
+            new_yerr[np.isnan(new_yerr)] = 0
+            self.yerr = new_yerr
+        else:
+            self.yerr = yerr
         if qs:
             self.qs = np.array(qs)[self.index]
             self.fmts = self._setup_fmts(qs)[self.index] if not fmts else np.array(fmts)
@@ -98,24 +108,40 @@ class model(object):
         return fig
 
     def _get_ssr(self, model, data, err):
-        return np.square(np.divide(model-data, err))
+        return np.nansum(np.square(np.divide(model-data, err)))
 
     def _get_bic(self, model, k):
         ssr = self._get_ssr(model, self.y, self.yerr)
-        bic = np.nansum(ssr) + k*np.log(len(model))
+        bic = ssr + k*np.log(len(model))
         return bic, np.nansum(ssr)
 
     def _determine_accuracy(self, res):
         label, model, k = res
-        # print label
-        return self._get_bic(model, k)
+        acc = self._get_bic(model, k)
+        return acc
+
+    def _get_jitter_ssr(self, j, model, data, yerr):
+        s = np.sqrt(yerr**2 + j**2)
+        ssr = self._get_ssr(model, data, s)
+        d = np.abs(ssr - len(model))
+        return d
+
+    def _get_jitter(self, model, gs):
+        init = [0.005]
+        bnds = [(0, 1)]
+        res = optimize.minimize(self._get_jitter_ssr, init, \
+                                args=(model[gs], self.y[gs], self.yerr[gs]), bounds=bnds)
+        s = np.sqrt(self.yerr[gs]**2 + res.x**2)
+        ssr = self._get_ssr(model[gs], self.y[gs], s)
+        d = np.abs(ssr - np.array(len(gs)))
+        return res.x
 
     def _get_jitter_grid(self, model, gs):
         n = np.array(len(gs))
         is_first = True
-        for j in np.arange(0, 0.01, 0.0001):
+        for j in np.arange(0, 1, 0.0001):
             s = np.sqrt(self.yerr[gs]**2 + j**2)
-            ssr = np.sum(self._get_ssr(model[gs], self.y[gs], s))
+            ssr = self._get_ssr(model[gs], self.y[gs], s)
             d = np.abs(ssr - n)
             if is_first:
                 best_j = j
@@ -127,18 +153,17 @@ class model(object):
         return best_j
 
     def fix_errors(self):
-        ssrs = [np.nansum(self._get_ssr(res[1], self.y, self.yerr)) for res in self.reses]
+        ssrs = [self._get_ssr(res[1], self.y, self.yerr) for res in self.reses]
         ssrs = [np.nan if ssr == 0.0 else ssr for ssr in ssrs]
         best_i = np.nanargmin(ssrs) if not np.all(np.isnan(ssrs)) else np.argmin(ssrs)
         model = self.reses[best_i][1]
         ran = 4 if np.any(self.qs) else 1
         for i in range(ran):
             gs = np.where(np.array(self.qs) == i)[0]
-            jitter = self._get_jitter_grid(model, gs)
+            jitter = self._get_jitter(model, gs)
             new_err = np.sqrt(self.yerr[gs]**2 + jitter**2)
-            self.yerr[gs] = [err if not np.isnan(err) else self.yerr[gs[i]] \
+            self.yerr[gs] = [err if (not (np.isnan(err) or err == 0.0)) else self.yerr[gs[i]] \
                              for i, err in enumerate(new_err)]
-        # print "NEW SSR", np.nansum(self._get_ssr(model, self.y, self.yerr))
         return 0
 
     def _get_best_accuracies(self):
@@ -224,10 +249,9 @@ class model(object):
 
     def is_variable(self):
         self.run_through_models()
-
         self.fix_errors()
-        best_i, best_lab, best_bic, best_ssr = self._get_best_accuracies()
 
+        best_i, best_lab, best_bic, best_ssr = self._get_best_accuracies()
         bools = [not best_lab == "Const1D"]
         result = all(bools)
         logger.info("done: %s, %s" % (result, best_lab))

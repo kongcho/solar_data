@@ -72,12 +72,12 @@ def print_models(kics):
         y, x, yerr = n._setup_lcs_xys(n.res[0])
         m = model(y, x, yerr=yerr, qs=pars["qs"])
         m.is_variable()
-        # m.plot_many_lines()
-        # plt.show()
+        m.plot_many_lines()
+        plt.show()
 
 def output(n, tot):
     params = ["variable", "curve_fit", "var_chi2", "var_bic"]
-    fout = "var_out_%d.out" % n
+    fout = "new_var_out_%d.out" % n
     all_kics = get_nth_col("./data/table4.dat", 0, " ", 0)
     l = len(all_kics)
     start = int(n/float(tot)*l)
@@ -112,10 +112,12 @@ def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    # kics = get_nth_col("./data/table4.dat", 0, " ", 0)
     # kics = get_nth_kics("./data/table4.dat", 2343, 1, 0, " ", 0)
-    # kics = ["5042629", "4825845", "5854038", "5854073"]
+    kics = ["5042629", "4825845", "5854038", "5854073"]
     # kics = ["4726114", "10087863", "6263983"]
+
+    # kics = ["4825845", "5854038", "5854073"]
 
     run_mult(10, output)
 
