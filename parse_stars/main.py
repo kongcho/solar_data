@@ -16,10 +16,10 @@ def make_sound(duration=0.3, freq=440):
 
 
 def photo(kic):
-    target = run_photometry(kic, plot_flag=False)
+    target = run_photometry(kic, plot_flag=True)
     target.model_uncert()
-    calculate_better_aperture(target, 0.001, 2, 0.7, 15)
-    model_background(target, 0.2, 15)
+    # calculate_better_aperture(target, 0.001, 2, 0.7, 15)
+    # model_background(target, 0.2, 15)
     print target.obs_flux
     print target.target_uncert
     plot_data(target)
@@ -75,38 +75,15 @@ def print_models(kics):
         m.plot_many_lines()
         plt.show()
 
-def output(n, tot):
+def output(kics, n):
     params = ["variable", "curve_fit", "var_chi2", "var_bic"]
-    fout = "new_var_out_%d.out" % n
-    all_kics = get_nth_col("./data/table4.dat", 0, " ", 0)
-    l = len(all_kics)
-    start = int(n/float(tot)*l)
-    end = int((n+1)/float(tot)*l)
-    kics = all_kics[start:end]
-    print start, end
-    # ns = new_stars(kics)
-    # ns.print_params(fout, params)
+    fout = "var_out_%d.out" % n
+    print fout
+    ns = new_stars(kics)
+    ns.print_params(fout, params)
     print "-------------------- OUTPUT %d DONE" % n
     return 0
 
-def run_mult(n, func):
-    import multiprocessing
-
-    orig = func.__name__
-
-    jobs = []
-    for i in range(n):
-        out_list = list()
-        process = multiprocessing.Process(target=output, args=(i, n))
-        jobs.append(process)
-
-    for j in jobs:
-        j.start()
-
-    for j in jobs:
-        j.join()
-
-    return 0
 
 def main():
     logger.info("### starting ###")
@@ -114,12 +91,22 @@ def main():
 
     # kics = get_nth_col("./data/table4.dat", 0, " ", 0)
     # kics = get_nth_kics("./data/table4.dat", 2343, 1, 0, " ", 0)
-    kics = ["5042629", "4825845", "5854038", "5854073"]
+    # kics = ["5042629", "4825845", "5854038", "5854073"]
     # kics = ["4726114", "10087863", "6263983"]
 
-    # kics = ["4825845", "5854038", "5854073"]
+    # do_multiprocess(10, run_kics, output, "./data/table4.dat", 0, " ", 0)
 
-    run_mult(10, output)
+    # photo("9083355")
+    # print_models(["9083355"])
+
+    n = 6
+    tot = 10
+    all_kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    l = len(all_kics)
+    start = int(n/float(tot)*l)
+    end = int((n+1)/float(tot)*l)
+    kics = all_kics[start:end]
+    output(kics, 6)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

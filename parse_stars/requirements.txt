@@ -5,4 +5,4 @@ astropy==2.0.2
 mahotas==1.4.4
 lightkurve==1.0b5
 git+https://github.com/dfm/kplr.git
-
+sklearn==0.19.2

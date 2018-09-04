@@ -32,11 +32,11 @@ class api(object):
         gaia_pars, updated_pars, periodic_pars, mast_pars, mast_table_pars = ([] for _ in range(5))
 
         for param in params:
-            if param in settings.gaia_dic_keys:
+            if param in settings.gaia_dic.keys():
                 gaia_pars.append(param)
-            elif param in settings.updated_dic_keys:
+            elif param in settings.updated_dic.keys():
                 updated_pars.append(param)
-            elif param in settings.periodic_dic_keys:
+            elif param in settings.periodic_dic.keys():
                 periodic_pars.append(param)
             elif param in settings.mast_params:
                 mast_pars.append(param)
@@ -241,13 +241,13 @@ class api(object):
             curr_params = {}
             arr = arrs[i]
             if len(arr) == 0:
-                curr_params["variable"], curr_params["var_fit"], \
-                    curr_params["var_ssr"], curr_params["var_bic"] = (np.nan for _ in range(4))
+                curr_params["variable"], curr_params["curve_fit"], \
+                    curr_params["var_chi2"], curr_params["var_bic"] = (np.nan for _ in range(4))
                 logger.error("couldn't parse table for this kic: %s" % kic)
             else:
                 curr_params["variable"] = 1 if arr[0] == "True" else 0
-                curr_params["var_fit"] = arr[1]
-                # curr_params["var_ssr"] = arr[2]
+                curr_params["curve_fit"] = arr[1]
+                # curr_params["var_chi2"] = arr[2]
                 # curr_params["var_bic"] = arr[3]
             reses.append(curr_params)
         return reses

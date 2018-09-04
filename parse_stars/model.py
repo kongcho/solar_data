@@ -128,7 +128,7 @@ class model(object):
 
     def _get_jitter(self, model, gs):
         init = [0.005]
-        bnds = [(0, 1)]
+        bnds = [(0, None)]
         res = optimize.minimize(self._get_jitter_ssr, init, \
                                 args=(model[gs], self.y[gs], self.yerr[gs]), bounds=bnds)
         s = np.sqrt(self.yerr[gs]**2 + res.x**2)
@@ -160,6 +160,7 @@ class model(object):
         ran = 4 if np.any(self.qs) else 1
         for i in range(ran):
             gs = np.where(np.array(self.qs) == i)[0]
+            jitter = self._get_jitter_grid(model, gs)
             jitter = self._get_jitter(model, gs)
             new_err = np.sqrt(self.yerr[gs]**2 + jitter**2)
             self.yerr[gs] = [err if (not (np.isnan(err) or err == 0.0)) else self.yerr[gs[i]] \
@@ -248,6 +249,9 @@ class model(object):
         return self._get_ssr(model), self._get_bic(model, k)
 
     def is_variable(self):
+        if np.all(np.isnan(self.y)):
+            return False, "Unsure", np.nan, np.nan
+
         self.run_through_models()
         self.fix_errors()
 

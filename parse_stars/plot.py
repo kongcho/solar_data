@@ -21,6 +21,8 @@ def plot_data(target, count=0):
     """
     creates plot of light curve and aperture for one target
     assumes already have right data before from target
+
+    :return: matplotlib figure generated
     """
     fig = plt.figure(figsize=(11,8))
     gs.GridSpec(3,3)
@@ -53,6 +55,8 @@ def tests_booleans(targ, boolean_funcs, count, pick_bad=True, edge_lim=0.015, \
     :boolean_funcs: list of boolean functions that determine if star has issues with light curve
     :pick_bad: if want to plot only problematic stars
     :edge_lim, min_val, ntargets: see f3 photometry
+
+    :return: target in f3 photometry class
     """
     target = run_photometry(targ, edge_lim=edge_lim, min_val=min_val, ntargets=ntargets)
     if target == 1:
@@ -76,6 +80,8 @@ def plot_targets(filename, boolean_funcs, targets, pick_bad=True):
     :boolean_funcs: boolean functions that take in a target and output True/False
     :targets: list of targets to plot through, plots all in one file
     :pick_bad: if want to plot problematic stars vs nonproblematic stars
+
+    :return: pruned list of targets
     """
     filename = filename.rsplit(".", 1)[0]
     total = len(targets)
@@ -110,6 +116,8 @@ def plot_functions(targ, fout="./", save_fig=True, *funcs, **kwargs):
     :save_fig: save figure to pdf as apposed to showing the plots
     :funcs: list of functions that take in target
     :kwargs: optional arguments for list of functions, unique for each function
+
+    :return: target
     """
     target = run_photometry(targ)
     if target == 1:
@@ -148,8 +156,6 @@ def plot_box(x1, x2, y1, y2, marker='r-', **kwargs):
     return 0
 
 
-# function, plots the different light curves for original calculation, with improved aperture,
-#   and the effects of background modelling
 def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, mask_factor=0.001, \
                               max_factor=0.2, min_img=-1000, max_img=1000, save_pdf=True):
     """
@@ -165,6 +171,8 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
     :min_img: vmin for all plots, None if no minimum
     :max_img: vmax for all plots, None if no maximum
     :save_pdf: saves all plots to pdf, will always save before/after light curves
+
+    :return: target after photometry
     """
     target = run_photometry(targ)
     if target == 1:

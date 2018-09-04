@@ -15,6 +15,12 @@ import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
+from sklearn.feature_selection import RFECV
+from sklearn.cross_validation import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
+
 class new_stars(object):
 
     def __init__(self, kics):
@@ -50,9 +56,9 @@ class new_stars(object):
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param == "variable":
-                    self.get_is_variable()
-                    # self.get_params([param])
-                    # self.setup_self_variable()
+                    # self.get_is_variable()
+                    self.get_params([param])
+                    self.setup_self_variable()
                 else:
                     self.get_params([param])
         return 0
@@ -253,30 +259,47 @@ class new_stars(object):
         logger.info("done")
         return 0
 
-    def _setup_logreg(self, params):
-        import sklearn as skl
-        from sklearn.feature_selection import RFE
-        from sklearn.cross_validation import train_test_split
-        from sklearn.linear_model import LogisticRegression
-        from sklearn import metrics
-
-        self._check_params(["variable"])
-        features = ["metallicity", "prot", "teff", "av"]
-        self._check_params(features)
-
+    def _setup_skl(self, params):
+        self._check_params(["variable"] + params)
         variables = []
         data = []
         for i, star in enumerate(self.res):
             pars = star["params"]
-            relevant_pars = [pars[par] for par in features]
-            data.append(relevant_pars)
-            variables.append(pars["variable"])
+            good_pars = []
+            for par in params:
+                if np.isnan(pars[par]):
+                    break
+                else:
+                    good_pars.append(pars[par])
+            else:
+                data.append(good_pars)
+                variables.append(pars["variable"])
+        return variables, data
 
-        print variables
-        print data
+    def prune_params(self, fitting, data, variables):
+        rfe = RFECV(fitting, verbose=1)
+        rfe.fit(data, variables)
+        param_rank = sorted(zip(map(lambda x: round(x, 4), rfe.ranking_), params))
+        logger.info("done: %s" % param_rank)
+        return params[rfe.support_]
 
-    def do_logreg(self, params):
-        pass
+    def do_random_forest(self, params, train_factor):
+        clf = RandomForestClassifier()
+        all_dat, all_vars = self._setup_skl(params)
+        if train_factor == 1:
+            train_x, train_y = all_dat, all_vars
+            test_x, test_y = all_dat, all_vars
+        else:
+            train_x, test_x, \
+                train_y, test_y = train_test_split(all_dat, all_vars, train_size=train_factor)
+
+        clf = clf.fit(train_x, train_y)
+        param_rank = sorted(zip(map(lambda x: round(x, 4), clf.feature_importances_), params))
+        logger.info("done: %s" % param_rank)
+        logger.info("accuracy (all data): %f" % clf.score(all_dat, all_vars))
+        logger.info("accuracy (test data): %f" % clf.score(test_x, test_y))
+        return param_rank
+
 
 if __name__ == "__main__":
     mpl_setup()
