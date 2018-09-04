@@ -145,7 +145,7 @@ gaia_dic = {
     "radem": ("radem", float),
     "avs": ("avs", float),
     "evState": ("evState", int), # evolutionary state
-    "binary": ("binaryFlag", int) # binarity
+    "binaryFlag": ("binaryFlag", int) # binarity
 }
 
 # McQuillian

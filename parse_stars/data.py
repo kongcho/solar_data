@@ -51,16 +51,21 @@ class new_stars(object):
         return 0
 
     def _check_params(self, params):
+        rem_pars = []
         for param in params:
             if param not in self.params:
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param == "variable":
                     # self.get_is_variable()
+
                     self.get_params([param])
                     self.setup_self_variable()
+                elif param == "closest_edge":
+                    self.get_edge_distance()
                 else:
-                    self.get_params([param])
+                    rem_pars.append(param)
+        self.get_params(rem_pars)
         return 0
 
     def _calc_luminosity(self, radius, teff):
@@ -91,6 +96,15 @@ class new_stars(object):
                     new_star = new_stars([neighbour])
                     new_star.get_params(params, **kwargs)
                     star_pars["neighbours_stars"].append(new_star)
+        return 0
+
+    def get_edge_distance(self):
+        self._check_params(["close_edges"])
+        for i, star in enumerate(self.res):
+            star_pars = star["params"]
+            edges = star_pars["close_edges"]
+            star_pars["closest_edge"] = np.nanmin(edges)
+        self.params.append("closest_edge")
         return 0
 
     def filter_params(self, param_dic, edit_res=True):
@@ -267,6 +281,8 @@ class new_stars(object):
             pars = star["params"]
             good_pars = []
             for par in params:
+                if par not in pars.keys():
+                    break
                 if np.isnan(pars[par]):
                     break
                 else:
@@ -274,7 +290,7 @@ class new_stars(object):
             else:
                 data.append(good_pars)
                 variables.append(pars["variable"])
-        return variables, data
+        return data, variables
 
     def prune_params(self, fitting, data, variables):
         rfe = RFECV(fitting, verbose=1)
@@ -286,6 +302,10 @@ class new_stars(object):
     def do_random_forest(self, params, train_factor):
         clf = RandomForestClassifier()
         all_dat, all_vars = self._setup_skl(params)
+        if not all_dat and not all_vars:
+            logger.error("not enough data")
+            return 1
+
         if train_factor == 1:
             train_x, train_y = all_dat, all_vars
             test_x, test_y = all_dat, all_vars
@@ -298,7 +318,7 @@ class new_stars(object):
         logger.info("done: %s" % param_rank)
         logger.info("accuracy (all data): %f" % clf.score(all_dat, all_vars))
         logger.info("accuracy (test data): %f" % clf.score(test_x, test_y))
-        return param_rank
+        return train_x, train_y
 
 
 if __name__ == "__main__":

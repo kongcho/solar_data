@@ -1,7 +1,7 @@
 from settings import *
 from utils import *
 from aperture import run_photometry, calculate_better_aperture, model_background
-from plot import plot_data
+from plot import plot_data, plot_background_modelling
 from data import new_stars
 from model import model
 
@@ -89,24 +89,37 @@ def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    # kics = get_nth_col("./data/table4.dat", 0, " ", 0)
-    # kics = get_nth_kics("./data/table4.dat", 2343, 1, 0, " ", 0)
-    # kics = ["5042629", "4825845", "5854038", "5854073"]
-    # kics = ["4726114", "10087863", "6263983"]
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    # kics = get_nth_kics("./data/table4.dat", 5000, 1, 0, " ", 0)
+    # kics = ["9083355"]
 
-    # do_multiprocess(10, run_kics, output, "./data/table4.dat", 0, " ", 0)
+    features = ["teff", "dist", "rad", "avs", "evState", "binaryFlag", \
+                "logg", "metallicity", "rho", "av", \
+                "prot", "rper", "LPH", "closest_edge"]
 
-    # photo("9083355")
-    # print_models(["9083355"])
+    n = new_stars(kics)
+    res = n.do_random_forest(features, 1)
+    if res != 1:
+        params = n.prune_params(RandomForestClassifier, res[0], res[1])
+        print "PARAMSHERE", params
+        res_new = n.do_random_forest(params, 1)
 
-    n = 6
-    tot = 10
-    all_kics = get_nth_col("./data/table4.dat", 0, " ", 0)
-    l = len(all_kics)
-    start = int(n/float(tot)*l)
-    end = int((n+1)/float(tot)*l)
-    kics = all_kics[start:end]
-    output(kics, 6)
+    res = n.do_random_forest(features, 0.7)
+    if res != 1:
+        params = n.prune_params(RandomForestClassifier, res[0], res[1])
+        print "PARAMSHERE", params
+        res_new = n.do_random_forest(params, 0.7)
+
+    # print n.prune_params(RandomForestClassifier, dat, var)
+
+    # n = 6
+    # tot = 10
+    # all_kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    # l = len(all_kics)
+    # start = int(n/float(tot)*l)
+    # end = int((n+1)/float(tot)*l)
+    # kics = all_kics[start:end]
+    # output(kics, 6)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

@@ -174,7 +174,7 @@ def plot_background_modelling(targ, fout="./", image_region=15, model_pix=15, ma
 
     :return: target after photometry
     """
-    target = run_photometry(targ)
+    target = run_photometry(targ, plot_flag=True)
     if target == 1:
         return target
 

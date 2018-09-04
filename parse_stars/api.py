@@ -34,7 +34,7 @@ class api(object):
         for param in params:
             if param in settings.gaia_dic.keys():
                 gaia_pars.append(param)
-            elif param in settings.updated_dic.keys():
+            if param in settings.updated_dic.keys():
                 updated_pars.append(param)
             elif param in settings.periodic_dic.keys():
                 periodic_pars.append(param)
@@ -53,7 +53,9 @@ class api(object):
             self._update_params(new_params, self.get_lcs_imgs(kics, self.lc_img_dir))
         if "lcs_qs" in params:
             self._update_params(new_params, self.get_lcs_qs(kics, self.lc_obs_dir))
-        if "close_edges" in params:
+        if "close_labels" in params:
+            self._update_params(new_params, self.get_close_labels(kics, 20))
+        elif "close_edges" in params:
             self._update_params(new_params, self.get_close_edges(kics))
         if "variable" in params:
             self._update_params(new_params, self.get_variable(kics, self.lc_var_dir))
@@ -67,7 +69,6 @@ class api(object):
         self._check_params_dic(new_params, periodic_pars)
         self._update_params(new_params, self.get_updated_params(kics, updated_pars))
         self._update_params(new_params, self.get_gaia_params(kics, gaia_pars))
-        self._check_params_dic(new_params, gaia_pars)
         return new_params
 
     def _update_params(self, old_res, new_res):
@@ -96,8 +97,8 @@ class api(object):
         col_name_arr, type_arr = self._format_params(settings.gaia_dic, params)
         t = table_api(self.gaia_dir, "&", 1, 0, "\\")
         col_nos = t.get_col_nos(col_name_arr, settings.gaia_dic_keys)
+        print params, col_nos
         param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
-        param_res = self._check_params_dic(param_res, params)
         return param_res
 
     def get_updated_params(self, kics, params):
@@ -166,28 +167,29 @@ class api(object):
             reses.append(curr_params)
         return reses
 
-    def get_close_edges(self, kics, min_distance=20, shape=(1070, 1132)):
+    def get_close_edges(self, kics, shape=(1070, 1132)):
         reses = []
         rows_ks = ["Row_0", "Row_1", "Row_2", "Row_3"]
         cols_ks = ["Column_0", "Column_1", "Column_2", "Column_3"]
-        mast_reses = self.get_mast_params(kics, keys)
+        mast_reses = self.get_mast_params(kics, rows_ks + cols_ks)
         for res in mast_reses:
             curr_params = {}
-            edges = []
             rows = [res[k] if res[k] is not None else np.nan for k in rows_ks]
             cols = [res[k] if res[k] is not None else np.nan for k in cols_ks]
-            if np.nanmin(rows) <= min_distance:
-                edges.append("Top")
-            elif abs(shape[0]-np.nanmax(rows)) <= min_distance:
-                edges.append("Bottom")
-            if np.nanmin(cols) <= min_distance:
-                edges.append("Left")
-            elif abs(shape[0]-np.nanmax(rows)) <= min_distance:
-                edges.append("Right")
-            if not edges:
-                edges.append(None)
+            edges = [np.nanmin(rows), abs(shape[0]-np.nanmax(rows)), \
+                     np.nanmin(cols), abs(shape[0]-np.nanmax(rows))]
             curr_params["close_edges"] = edges
             reses.append(curr_params)
+        return reses
+
+    def get_close_labels(self, kics, min_distance=30, shape=(1070, 1132)):
+        sides = ["Top", "Bottom", "Left", "Right"]
+        reses = self.get_close_edges(kics, shape)
+        for res in reses:
+            edges = res["close_edges"]
+            labels = [sides[i] for i in range(len(edges)) if edges[i] <= min_distance]
+            curr_params = {"close_labels": labels}
+            res.update(curr_params)
         return reses
 
     def get_lcs_times_uncerts(self, kics, lc_file):
@@ -235,7 +237,7 @@ class api(object):
 
     def get_variable(self, kics, lc_file):
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
-        arrs = t.parse_table_arrs(range(1, 3), kics=kics, types=[str, str, float, float])
+        arrs = t.parse_table_arrs(range(1, 5), kics=kics, types=[str, str, float, float])
         reses = []
         for i, kic in enumerate(kics):
             curr_params = {}
@@ -247,8 +249,8 @@ class api(object):
             else:
                 curr_params["variable"] = 1 if arr[0] == "True" else 0
                 curr_params["curve_fit"] = arr[1]
-                # curr_params["var_chi2"] = arr[2]
-                # curr_params["var_bic"] = arr[3]
+                curr_params["var_chi2"] = arr[2]
+                curr_params["var_bic"] = arr[3]
             reses.append(curr_params)
         return reses
 
