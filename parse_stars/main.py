@@ -1,9 +1,8 @@
 from settings import *
 from utils import *
-from aperture import run_photometry, calculate_better_aperture, model_background
-from plot import plot_data, plot_background_modelling
+from aperture import *
+from plot import *
 from data import new_stars
-from model import model
 
 import os
 import csv
@@ -84,12 +83,54 @@ def output(kics, n):
     print "-------------------- OUTPUT %d DONE" % n
     return 0
 
+def randfor(factor):
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+
+    features = ["teff", "dist", "rad", "avs", "evState", "binaryFlag", \
+                "logg", "metallicity", "rho", "av", \
+                "prot", "rper", "LPH", "closest_edge"]
+
+    n = new_stars(kics)
+    res = n.do_random_forest(features, factor)
+    if res != 1:
+        params = n.prune_params(RandomForestClassifier, res[0], res[1])
+        print "PARAMSHERE", params
+        res_new = n.do_random_forest(params, factor)
+
+    return 0
+
+def plot_hists(n, tot, params):
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    n = new_stars(kics)
+
+    n.plot_variable_params("luminosity", "teff")
+    plt.savefig("./lumvsteff.png")
+    plt.close("all")
+
+    param = "luminosity"
+    n.plot_variable_hist(param)
+    plt.savefig("./%s.png" % param)
+    plt.close("all")
+
+    for param in ["periodic"]:
+        n.plot_variable_bar(param)
+        plt.savefig("./%s.png" % param)
+        plt.close("all")
+
+    for param in ["dist", "logg", "mass", "metallicity", "prot", "rad", "teff", "rho", \
+                  "av", "rper"]:
+        n.plot_variable_hist(param)
+        plt.savefig("./%s.png" % param)
+        plt.close("all")
+
+
+
 
 def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)[:20]
     # kics = get_nth_kics("./data/table4.dat", 5000, 1, 0, " ", 0)
     # kics = ["9083355"]
 
@@ -97,29 +138,15 @@ def main():
                 "logg", "metallicity", "rho", "av", \
                 "prot", "rper", "LPH", "closest_edge"]
 
+    # randfor(1)
     n = new_stars(kics)
-    res = n.do_random_forest(features, 1)
-    if res != 1:
-        params = n.prune_params(RandomForestClassifier, res[0], res[1])
-        print "PARAMSHERE", params
-        res_new = n.do_random_forest(params, 1)
+    n.get_is_variable()
 
-    res = n.do_random_forest(features, 0.7)
-    if res != 1:
-        params = n.prune_params(RandomForestClassifier, res[0], res[1])
-        print "PARAMSHERE", params
-        res_new = n.do_random_forest(params, 0.7)
+    kics = ["757099", "893730", "893750","1026669","1027030","1028012","1028640",\
+            "1160947", "1161345","1161432","1163211"]
+    # kics += ["893234", "1026647", "1163579"]
 
-    # print n.prune_params(RandomForestClassifier, dat, var)
-
-    # n = 6
-    # tot = 10
-    # all_kics = get_nth_col("./data/table4.dat", 0, " ", 0)
-    # l = len(all_kics)
-    # start = int(n/float(tot)*l)
-    # end = int((n+1)/float(tot)*l)
-    # kics = all_kics[start:end]
-    # output(kics, 6)
+    m = new_stars(kics)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

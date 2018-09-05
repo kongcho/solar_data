@@ -10,6 +10,16 @@ from astropy.modeling import models, fitting
 from scipy import optimize
 
 class model(object):
+    """
+    applies models to a light curve
+
+    :y: y-values, light curve values
+    :x: x-values, light curve times
+    :yerr: y-value errors, must be same length as y
+    :xerr: x-value errors, must be same length as x
+    :qs: list of quarters of each light curve value
+    :fmts: list of format of each point, can be length 4 or length of y-values
+    """
     def __init__(self, y, x, yerr=None, xerr=None, qs=None, fmts=None):
         x = np.array(x)
         y = np.array(y)
@@ -30,7 +40,8 @@ class model(object):
             self.yerr = yerr
         if qs:
             self.qs = np.array(qs)[self.index]
-            self.fmts = self._setup_fmts(qs)[self.index] if not fmts else np.array(fmts)
+            self.fmts = self._setup_fmts(qs)[self.index] \
+                        if (not fmts and len(fmts) != len(y)) else np.array(fmts)
         else:
             self.qs = qs
             self.fmts = None
@@ -115,11 +126,6 @@ class model(object):
         bic = ssr + k*np.log(len(model))
         return bic, np.nansum(ssr)
 
-    def _determine_accuracy(self, res):
-        label, model, k = res
-        acc = self._get_bic(model, k)
-        return acc
-
     def _get_jitter_ssr(self, j, model, data, yerr):
         s = np.sqrt(yerr**2 + j**2)
         ssr = self._get_ssr(model, data, s)
@@ -167,21 +173,53 @@ class model(object):
                              for i, err in enumerate(new_err)]
         return 0
 
+    def _determine_accuracy(self, res):
+        label, model, k = res
+        acc = self._get_bic(model, k)
+        return acc
+
     def _get_best_accuracies(self):
         bics = []
         ssrs = []
+        labs = [] #TBD
         for res in self.reses:
             bic, ssr = self._determine_accuracy(res)
             bics.append(bic)
             ssrs.append(ssr)
+            labs.append(res[0]) #TBD
+
+        idxs = np.argsort(bics) #TBD ---->
+        bics = np.array(bics)
+        labs = np.array(labs)
+        new_labs = labs[idxs]
+        new_bics = bics[idxs]
+
+        good_labs = []
+        good_idxs = []
+        for i, lab in enumerate(new_labs):
+            if lab not in good_labs:
+                good_labs.append(lab)
+                good_idxs.append(idxs[i])
+
+        print good_idxs, labs[good_idxs], bics[good_idxs]
+        diffs = np.abs(np.diff(bics[good_idxs]))
+        if diffs[0] <= 1:
+            print "OMGG HERE", labs[good_idxs], bics[good_idxs]
+            self.plot_many_lines()
+            plt.savefig(good_labs[0] + "_" + str(bics[good_idxs[0]]) + "_" + \
+                        good_labs[1] + "_" + str(bics[good_idxs[1]]) + ".png")
+            plt.close("all")
+
+        # TBD <------------------
         best_i = np.argmin(bics)
         best_bic = bics[best_i]
         best_ssr = ssrs[best_i]
         best_lab = self.reses[best_i][0]
         return best_i, best_lab, best_bic, best_ssr
 
-    def _estimate_freqs(self, times, max_years=13, times_per_year=0.15):
+    def _estimate_freqs(self, times, min_years=2, max_years=13, times_per_year=0.25):
         qt_factor = np.ptp(times)/(18*90)
+        print qt_factor
         year_factor = 365*qt_factor
         good_periods = np.arange(1, max_years, times_per_year)*year_factor
 
@@ -205,25 +243,23 @@ class model(object):
                         self.make_astropy_model(models.Const1D, fitting.LinearLSQFitter()), 1)
         self._setup_res("Linear1D", \
                         self.make_astropy_model(models.Linear1D, fitting.LinearLSQFitter()), 2)
-        # self._setup_res("Parabola1D", \
-        #                 self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), 2),\
-        #                 3)
+        self._setup_res("Parabola1D", \
+                        self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), 2),\
+                        3)
 
         # damped_sine_inits = [0.01, 0.001, 0.001, 0]
         # self._setup_res("DampedSine", \
         #                 self.make_scipy_model(self._damped_sine_model, self._simple_err_func, \
         #                                       damped_sine_inits), len(damped_sine_inits))
 
-        # for freq in self._estimate_freqs(self.x, 13, 0.125):
-        #     self._setup_res("Sine1D %f" % freq, \
-        #                     self.make_astropy_model(models.Sine1D, fitting.LevMarLSQFitter(), \
-        #                                             frequency=freq), 3)
-
-        for freq in self._estimate_freqs(self.x, 13, 0.25):
+        for freq in self._estimate_freqs(self.x, 2, 13, 0.25):
             for amp in self._estimate_amps(self.y, 5):
-                self._setup_res("Sine1D %f %f" % (freq, amp), \
+                # sine_label = "Sine1D %f %f" % (freq, amp)
+                sine_label = "Sine1D"
+                self._setup_res(sine_label, \
                                 self.make_scipy_model(self._sine_model, self._simple_err_func, \
                                                       [amp, freq, 0]), 3)
+
         logger.info("done")
         return 0
 

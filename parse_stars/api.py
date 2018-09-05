@@ -1,7 +1,3 @@
-"""
-FUNCTIONS TO INTERACT WITH DATABASES TO GET PARAMETERS FOR EACH STAR
-"""
-
 import settings
 from utils import get_nth_col
 from parse import table_api
@@ -12,6 +8,9 @@ import kplr
 import numpy as np
 
 class api(object):
+    """
+    api to get necessary parameters from combined databases
+    """
 
     def __init__(self):
         self.sources = ["q1-17", "mast", "mast_table", "periodic", "nonperiodic", \
@@ -28,6 +27,16 @@ class api(object):
         self.lc_var_dir = settings.filename_lc_var
 
     def get_params(self, kics, params, **neighbour_filters):
+        """
+        gets given parameters for list of kics into list of dictionaries
+        see possible parameters in settings.py
+
+        :kics: list of kics to get parameters for
+        :params: list of parameters to get for each kic
+        :neighbour_filters: parameter filters to determine what a neighbour is
+
+        :return: list of dictionary of parameters
+        """
         new_params = [{} for _ in kics]
         gaia_pars, updated_pars, periodic_pars, mast_pars, mast_table_pars = ([] for _ in range(5))
 
@@ -94,14 +103,20 @@ class api(object):
         return reses
 
     def get_gaia_params(self, kics, params):
+        """
+        gets new parameters from Gaia mission from [1]
+        data preceeds all other data from other databases
+        """
         col_name_arr, type_arr = self._format_params(settings.gaia_dic, params)
         t = table_api(self.gaia_dir, "&", 1, 0, "\\")
         col_nos = t.get_col_nos(col_name_arr, settings.gaia_dic_keys)
-        print params, col_nos
         param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
         return param_res
 
     def get_updated_params(self, kics, params):
+        """
+        gets new parameters from Mathur table [2]
+        """
         col_name_arr, type_arr = self._format_params(settings.updated_dic, params)
         t = table_api(self.updated_dir, " ", 0, 0)
         col_nos = t.get_col_nos(col_name_arr, settings.updated_dic_keys)
@@ -110,6 +125,9 @@ class api(object):
         return param_res
 
     def get_periodic_params(self, kics, params):
+        """
+        gets parameters for periodic stars from McQuillian [3]
+        """
         col_name_arr, type_arr = self._format_params(settings.periodic_dic, params)
         t = table_api(self.periodic_dir, ",", 1, 0)
         col_nos = t.get_col_nos(col_name_arr, settings.periodic_dic_keys)
@@ -117,6 +135,9 @@ class api(object):
         return param_res
 
     def get_nonperiodic_params(self, kics, params):
+        """
+        gets parameters for non-periodic stars from McQuillian [3]
+        """
         col_name_arr, type_arr = self._format_params(settings.nonperiodic_dic, params)
         t = table_api(self.nonperiodic_dir, ",", 1, 0)
         col_nos = t.get_col_nos(col_name_arr, settings.nonperiodic_dic_keys)
@@ -124,6 +145,9 @@ class api(object):
         return param_res
 
     def get_periodic_or_not(self, kics):
+        """
+        determines if star is periodic or not my McQuillian paper
+        """
         periodic = get_nth_col(self.periodic_dir, 0, ",", 1)
         unperiodics = get_nth_col(self.nonperiodic_dir, 0, ",", 1)
         reses = []
@@ -139,6 +163,9 @@ class api(object):
         return reses
 
     def get_mast_params(self, kics, params):
+        """
+        uses kplr to get MAST parameters (kic10 mission)
+        """
         client = kplr.API()
         reses = []
         for kic in kics:
@@ -154,6 +181,12 @@ class api(object):
         return reses
 
     def get_neighbours_or_not(self, kics, **filter_params):
+        """
+        gets if star has neighbours or not
+
+        :kics: list of kics to get results for
+        :filter_params: mast-formatted parameter filters to determine what a neighbour is
+        """
         reses = []
         for kic in kics:
             curr_params = {}
@@ -168,6 +201,12 @@ class api(object):
         return reses
 
     def get_close_edges(self, kics, shape=(1070, 1132)):
+        """
+        gets distance of star to edge of detector by distance
+
+        :kics: list of kics to get results for
+        :shape: shape of detector image
+        """
         reses = []
         rows_ks = ["Row_0", "Row_1", "Row_2", "Row_3"]
         cols_ks = ["Column_0", "Column_1", "Column_2", "Column_3"]
@@ -183,6 +222,14 @@ class api(object):
         return reses
 
     def get_close_labels(self, kics, min_distance=30, shape=(1070, 1132)):
+        """
+        gets label of side for star close to the edge of detector by min_distance
+        use either get_close_edges or get_close_labels
+
+        :kics: list of kics to get results for
+        :min_distance: distance from edge of detector to be close
+        :shape: shape of detector image
+        """
         sides = ["Top", "Bottom", "Left", "Right"]
         reses = self.get_close_edges(kics, shape)
         for res in reses:
@@ -193,6 +240,9 @@ class api(object):
         return reses
 
     def get_lcs_times_uncerts(self, kics, lc_file):
+        """
+        gets calculated light curves, times, and uncertainties from our database
+        """
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
         arrs = t.parse_table_arrs(range(1, 109), kics=kics, types=[float]*108)
         reses = []
@@ -212,6 +262,9 @@ class api(object):
         return reses
 
     def get_lcs_imgs(self, kics, lc_file):
+        """
+        gets star aperture from our database
+        """
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
         arrs = t.parse_table_arrs(range(1, 902), kics=kics, types=[float]*902)
         reses = []
@@ -227,6 +280,9 @@ class api(object):
         return reses
 
     def get_lcs_qs(self, kics, lc_file):
+        """
+        gets list of kepler quarters
+        """
         t = table_api(lc_file, delimiter=" ", skip_rows=0, kic_col_no=None)
         times = t.get_nth_col(0, float)
         qs = t.get_nth_col(1, int)
@@ -236,6 +292,9 @@ class api(object):
         return reses
 
     def get_variable(self, kics, lc_file):
+        """
+        gets if star is variable or not with Chi-squared values from our database
+        """
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
         arrs = t.parse_table_arrs(range(1, 5), kics=kics, types=[str, str, float, float])
         reses = []

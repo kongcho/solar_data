@@ -1,11 +1,6 @@
-"""
-API TO GET MAST DATA
-"""
-
 from settings import setup_logging
 logger = setup_logging()
 
-import kplr
 import requests
 import json
 
@@ -20,6 +15,9 @@ class session(object):
         return r
 
 class mast_api(object):
+    """
+    get parameters from mast, see mast for parameters
+    """
     def __init__(self):
         self.missions = ["kepler", "k2"]
         self.tables_kep = ["data_search", "kepler_fov", "kic10", "kgmatch", \
@@ -50,6 +48,18 @@ class mast_api(object):
 
     def get_mission_params(self, mission, table=None, output_params="", \
                             form="JSON", maxrec=100000, **params):
+        """
+        gets all parameters given from mast for given missions
+
+        :mission: mission data
+        :table: some missions have multiple tables/databases
+        :output_params: list-separated string of desired parameters to show
+        :form: output format
+        :maxrec: maximum records shown
+        :params: other paramters to request from mast with
+
+        :return: output formatted string
+        """
         if self._check_url_exists(mission, table, form) == 1:
             return None
         param_dict = {"action": "Search",
@@ -57,7 +67,7 @@ class mast_api(object):
                       "outputformat": form,
         }
         param_dict.update(params)
-        if output_params is not None:
+        if output_params != "":
             param_dict.update({"selectedColumnsCsv": output_params})
         r = session(self.url).get(params=param_dict)
         if r.status_code == 200:
@@ -65,8 +75,13 @@ class mast_api(object):
             return r
         return None
 
-    def parse_json_output(self, mission, table=None, output_params=None, \
+    def parse_json_output(self, mission, table=None, output_params="", \
                            maxrec=100000, **params):
+        """
+        gets parameters from given mission but properly json-formatted
+
+        :mission, table, output_params, maxrec, params: see above
+        """
         new_arr = []
         r = self.get_mission_params(mission, table, form="JSON", maxrec=maxrec, **params)
         if r is None:
@@ -88,6 +103,15 @@ class mast_api(object):
         return new_arr
 
     def get_caom_params(self, columns, filters, form="json", page_size=400000, **kwargs):
+        """
+        gets CAOM parameters straight from mast api
+
+        :columns: parameters
+        :filters: any filters for results
+        :form: output format
+        :page_size: maximum records shown
+        :kwargs: remaining arguments for api
+        """
         url = self.base_url.format("mast") + "api/v0/invoke"
         columns_str = format_arr(columns, ",")
         json_req = {"service": "Mast.Caom.Filtered",

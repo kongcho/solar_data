@@ -1,7 +1,3 @@
-"""
-FUNCTIONS THAT AFFECT/WORK ON THE APERTURE OF THE STAR
-"""
-
 from utils import clip_array, is_n_bools
 from settings import setup_logging, ffidata_folder, f3_location
 logger = setup_logging()
@@ -13,10 +9,19 @@ import lightkurve as lk
 os.sys.path.append(f3_location)
 from f3 import photometry
 
-import matplotlib.pyplot as plt
 
-# helper function for improve_aperture, pads any image to desired shape with pad_val
 def pad_img(img, desired_shape, positions, pad_val=0):
+    """
+    helper
+    pads any image to desired shape, filled with pad_val
+
+    :img: current image to pad
+    :desired_shape: shape to pad to
+    :positions: position of the given image within an empty desired shape
+    :pad_val: value to pad image with
+
+    :return: new image with desired shape
+    """
     if len(desired_shape) != len(positions):
         logger.error("pad_img: odd required shape dimensions")
         return img
@@ -32,6 +37,17 @@ def pad_img(img, desired_shape, positions, pad_val=0):
 
 # function, pads image to fit desired_shape and fill up extra space with pad_val
 def pad_img_wrap(img, desired_shape, sides, pad_val=0):
+    """
+    wrapper that pads image to fit desired_shape and fill up extra space with pad_val
+    determines where the current image position is based on which side it is on
+
+    :img: current image to pad
+    :desired_shape: shape to pad to
+    :sides: which side of the image needs to be padded
+    :pad_val: value to pad image with
+
+    :return: new image with desired shape
+    """
     offset_x = 0
     offset_y = 0
     if "Top" in sides:
@@ -43,10 +59,13 @@ def pad_img_wrap(img, desired_shape, sides, pad_val=0):
     return img
 
 
-# helper function for different functions
-# runs find_other_sources under different parameters to change the aperture
 def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
                            extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
+    """
+    helper
+    assumes already has a target class setup for the kic
+    runs photometry to get the light curves and aperture based on given settings (see f3)
+    """
 
     try:
         target.find_other_sources(edge_lim, min_val, ntargets, extend_region_size, \
@@ -86,10 +105,13 @@ def run_partial_photometry(target, image_region=15, edge_lim=0.015, min_val=5000
     return target
 
 
-# function, sets up photometry for a star and adds aperture to class
 def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets=100, \
                    extend_region_size=3, remove_excess=4, plot_window=15, plot_flag=False):
+    """
+    creates target class and runs photometry on it, gets aperture and light curve
 
+    :return: target
+    """
     try:
         target = photometry.star(targ, ffi_dir=ffidata_folder)
         target.make_postcard()
@@ -102,9 +124,11 @@ def run_photometry(targ, image_region=15, edge_lim=0.015, min_val=5000, ntargets
                                   extend_region_size, remove_excess, plot_window, plot_flag)
 
 
-# helper function that determines 3-point pattern, but all quarters from the
-#   same channel must have the same pattern
 def is_more_or_less_all(target, quarters):
+    """
+    examines light curve boolean function
+    sees if light curve has a 3-point pattern for all quarters within the same channel
+    """
     is_strange = 0
     is_incr = False
     is_decr = False
@@ -132,9 +156,15 @@ def is_more_or_less_all(target, quarters):
     return is_strange
 
 
-# helper function for is_more_or_less
-# returns if all but one element is nonzero in an array
 def most_are_same(arr):
+    """
+    helper for is_more_or_less
+    returns if all but one element is nonzero in an array
+
+    :arr: array of -1 (downward), +1 (upward) pattern for given channel
+
+    :return: boolean if most are the same, number of times they are the same
+    """
     nos, counts = np.unique(arr, return_counts=True)
     for i, count in enumerate(counts):
         if count >= len(arr) - 1 and nos[i] != 0:
@@ -142,10 +172,13 @@ def most_are_same(arr):
     return False, 0
 
 
-# helper function that determines 3-point pattern
-# all but one pattern from same channel must be the same
-# returns -1 for downward, +1 for upward
 def is_more_or_less(target, quarters):
+    """
+    helper function that determines 3-point pattern
+    checks that all but one pattern from same channel must be the same
+
+    :return: 0 if no pattern, -1 if downward pattern, +1 if upward pattern
+    """
     curr_ch = []
     is_incr = False
     is_decr = False
@@ -169,9 +202,13 @@ def is_more_or_less(target, quarters):
     return 0
 
 
-# boolean function: determines if 3-point pattern exists
-# aperture is too large (many stars in aperture) or too small (psf going out)
 def is_large_ap(target):
+    """
+    examines light curve boolean function: if 3-point pattern exists
+    implies aperture is too large (many stars in aperture) or too small (psf going out)
+
+    :return: boolean
+    """
     golden = range(0, 8)
     blacks = [[8, 9], [20, 21, 22], [31, 32, 33], [43, 44, 45]]
     reds = [[10, 11, 12], [23, 24, 25], [34, 35, 36], [46, 47, 48]]
@@ -187,9 +224,19 @@ def is_large_ap(target):
     return False
 
 
-# helper function for has_close_peaks: is peak if greater than all neighbours
-#   and is brighter than center peak by factor, assumes center peak = target
 def is_peak(max_of, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
+    """
+    helper for has_close_peaks
+    a peak isn't surrounded by only 0.0s, is greater than neighbours,
+      and is brighter than factor of center peak
+
+    :max_of: value multiplied by factor as threshold
+    :xi0j0: center pixel
+    :xi0j1, xi0j2, xi1j0, xi2j0: surrounding pixels
+    :factor: multiplied by max_of as threshold to determine if is a peak
+
+    :return: boolean
+    """
     min_bright = factor * max_of
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [not (xi0j0 == 0 and all(x == 0 for x in others))
@@ -199,9 +246,16 @@ def is_peak(max_of, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
     return all(booleans)
 
 
-# boolean function: determines if there's a peak within a given distance
-#   around center point (target star)
 def has_close_peaks(target, diff=7, min_factor=1, avoid_pixels=0):
+    """
+    examines light curve boolean function: if there is a peak around distance of center point
+
+    :diff: distance from center of aperture
+    :min_factor: factor of center pixel value to determine threshold for a peak or not
+    :avoid_pixels: distance from center of aperture to be immune to be a peak
+
+    :return: boolean
+    """
     peaks = []
     img = target.img
     len_x = img.shape[1]
@@ -235,29 +289,16 @@ def has_close_peaks(target, diff=7, min_factor=1, avoid_pixels=0):
     return any(peaks)
 
 
-# boolean function: poor estimate for faint stars based on aperture
-def is_faint_rough(target, limit=5500000):
-    c_i = (img.shape[0])//2
-    c_j = (img.shape[1])//2
-    is_faint = True
-    for i in range(c_i - 1, c_i + 2):
-        for j in range(c_i - 1, c_i + 2):
-            if target.img[i][j] != 0.0 and target.img[i][j] >= limit:
-                is_faint = False
-                break
-    logger.info("%s" % is_faint)
-    return is_faint
-
-
-# boolean function: always passes every star, for testing
-def fake_bool(target):
-    logger.info("done")
-    return True
-
-
-# function, outputs dict of functions that finds faulty stars
-#   and kics that fall in those functions
 def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntargets=100):
+    """
+    output dictionary of functions and list of kics that are True for those functions
+
+    :targets: list of target class instances
+    :boolean_funcs: list of boolean functions
+    :edge_lim, min_val, ntargets: see run_photometry / f3
+
+    :return: dictionary
+    """
     full_dict = {}
     full_dict["good"] = []
     for boolean_func in boolean_funcs:
@@ -277,8 +318,18 @@ def get_boolean_stars(targets, boolean_funcs, edge_lim=0.015, min_val=500, ntarg
     return full_dict
 
 
-# helper function for remove_second_star, determines how second star is detected
 def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
+    """
+    helper, determines how the second star is detected
+    a second star is at the edge of detector, is greated than its neighbours and threshold
+
+    :img: aperture image
+    :xi0j0: center pixel
+    :xi0j1, xi0j2, xi1j0, xi2j0: surrounding pixels
+    :factor: multiplied by image maximum as threshold
+
+    :return: boolean
+    """
     min_bright = factor * (np.max(img))
     others = [xi0j1, xi0j2, xi1j0, xi2j0]
     booleans = [any(others)
@@ -289,8 +340,9 @@ def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
     return all(booleans)
 
 
-# helper function for improve_aperture, removes any detected second stars
-def remove_second_star(img, min_factor):
+    """
+    helper for improve_aperture, removes any detected second stars by pixel
+    """
     removes = []
     for i in range(1, img.shape[0]-1):
         for j in range(1, img.shape[1]-1):
@@ -303,8 +355,14 @@ def remove_second_star(img, min_factor):
     return img
 
 
-# function, inserts new aperture in the target information and data
 def img_to_new_aperture(target, img, image_region=15):
+    """
+    modifies new aperture into target information to calculate new light curves
+
+    :target: target instance
+    :img: new aperture
+    :image_region: distance from center pixel to capture for aperture
+    """
     target.img = img
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
@@ -322,8 +380,19 @@ def img_to_new_aperture(target, img, image_region=15):
     return img
 
 
-# helper function for isolate_star_cycle
 def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
+    """
+    helper for improve_aperture
+    returns index where array decreases/increases when it's supposed to increase/decrease
+
+    :arr: 1D array to process
+    :is_decreasing: boolean if is supposed to increase/decrease
+    :relax_pixels: number of pixels that the pattern has to break to count
+    :diff_flux: minimum difference between consecutive pixels to be in one direction
+
+    :return: index of where the pattern breaks,
+      0 if whole array increases, -1 if whole array decreases
+    """
     new_arr = arr if is_decreasing else np.flip(arr, 0)
     diffs = np.diff(new_arr)
     length = range(len(diffs))
@@ -336,9 +405,18 @@ def monotonic_arr(arr, is_decreasing, relax_pixels=2, diff_flux=0):
     return -1 if is_decreasing else 0
 
 
-# helper function for improve_aperture, removes other potential stars
-# relax_pixels is how relaxed the function is
 def isolate_star_cycle(img, ii, jj, relax_pixels=2, image_region=15):
+    """
+    helper for improve_aperture
+    removes potential stars by assuming pixels have decreasing flux away from the star
+
+    :img: aperture
+    :ii, jj: center of aperture
+    :relax_pixels: how many pixels are required to break the pattern (how relaxed it is)
+    :image_region: distance around the center of the star for aperture
+
+    :return: new aperture
+    """
     len_x = img.shape[1]
     len_y = img.shape[0]
     c_j = len_x//2
@@ -369,8 +447,21 @@ def isolate_star_cycle(img, ii, jj, relax_pixels=2, image_region=15):
     return img
 
 
-# function, main function to improve aperture and remove other stars from initial apertures
 def improve_aperture(target, mask=None, relax_pixels=2, second_factor=0.7, image_region=15):
+    """
+    improves aperture by removing other stars from initial aperture
+
+    restricts aperture to given mask first, then removes other stars with strict parameter
+      if they are detected, relaxed parameters if not, then removes remaining second stars
+      at aperture edge
+
+    :mask: mask to restrict aperture to
+    :relax_pixels: how relaxed the function is if doesn't detect stars
+    :second_factor: factor threshold for second star removal
+    :image_region: distance from central pixel for aperture
+
+    :return: new aperture
+    """
     ii, jj = target.center
     ii, jj = int(ii), int(jj)
 
@@ -403,8 +494,15 @@ def improve_aperture(target, mask=None, relax_pixels=2, second_factor=0.7, image
     return target.img
 
 
-# helper that creates mask to overlay aperture with from rough psf from lightkurve package
 def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
+    """
+    helper that creates mask to overlay aperture with from rough PSF from lightkurve package
+
+    :mask_factor: factor multiplied maximum of given PSF from lightkurve
+    :image_region: distance from center of pixel as part of aperture
+
+    :return: mask (1s, 0s) as image
+    """
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
                tar.params['Channel_2'], tar.params['Channel_3']]
@@ -420,25 +518,40 @@ def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     return mask
 
 
-# function, finalises improved aperture with functions)
 def calculate_better_aperture(target, mask_factor=0.001, relax_pixels=2, \
                               second_factor=0.7, image_region=15):
+    """
+    combines creating a mask and improving aperture
+
+    :mask_factor, relax_pixels, second_factor, image_region: see above
+    """
     mask = calculate_aperture_mask(target, mask_factor, image_region)
     improve_aperture(target, mask, relax_pixels, second_factor, image_region)
     logger.info("done")
     return 0
 
 
-# helper, completes logical arr on given arrays, all arrays should be same size
 def logical_or_all_args(*args):
+    """
+    helper, completes logical arr on given arrays, all arrays should be same shape
+    """
     result = np.zeros_like(args[0])
     for arg in args:
         result += arg
     return np.where(result != 0, 1, 0)
 
 
-# helper that creates mask for the other stars in the background
-def make_background_mask(target, img, coords, max_factor=0.2, model_pix=15):
+def make_background_mask(target, img, coords, max_factor=0.2):
+    """
+    helper that creates mask for the other stars in the background
+
+    :target: target instance with given kic
+    :img: aperture
+    :coords: region edge coordinates to calculate mask from
+    :max_factor: float, percentile to get max_factor% greatest pixels as a mask
+
+    :return: mask for background stars
+    """
     if not np.any(img):
         return -1
 
@@ -449,9 +562,17 @@ def make_background_mask(target, img, coords, max_factor=0.2, model_pix=15):
     return mask
 
 
-# function, models the background variation and removes it to calculate the light curves
-# models background as median of masked background
 def model_background(target, max_factor=0.2, model_pix=15):
+    """
+    models the background variation and removes it to calculate the light curves
+    models background as median of masked background
+
+    :target: target instance
+    :max_factor: see make_background_mask
+    :model_pix: distance from center pixel to model with (is not img_region)
+
+    :return: target instance
+    """
     coords = clip_array([target.center[0]-model_pix, target.center[0]+model_pix, \
                          target.center[1]-model_pix, target.center[1]+model_pix], \
                         [0, target.postcard.shape[1]-1, 0, target.postcard.shape[2]-1], \
@@ -463,7 +584,7 @@ def model_background(target, max_factor=0.2, model_pix=15):
         region = target.postcard[i]
         img = region[min_i:max_i, min_j:max_j]
 
-        mask = make_background_mask(target, img, coords, max_factor, model_pix)
+        mask = make_background_mask(target, img, coords, max_factor)
         z = np.ma.masked_array(img, mask=mask)
         img -= np.ma.median(z)
 
@@ -473,8 +594,10 @@ def model_background(target, max_factor=0.2, model_pix=15):
     return target
 
 
-# helper, gets aperture center if the star is within image_region of edge of postcard
 def get_aperture_center(target, image_region=15):
+    """
+    gets aperture center location if the star is within image_region of edge of postcard
+    """
     aperture_center = [image_region, image_region]
     for i in range(2):
         center_i = int(target.center[i])

@@ -186,9 +186,12 @@ class new_stars(object):
             if star["kic"] in self.variables:
                 var_ys.append(star["params"][paramy])
                 var_xs.append(star["params"][paramx])
-            elif star["kic"] in self.non_variables:
-                non_var_ys.append(star["params"][paramy])
-                non_var_xs.append(star["params"][paramx])
+            non_var_ys.append(star["params"][paramy])
+            non_var_xs.append(star["params"][paramx])
+
+            # elif star["kic"] in self.non_variables:
+            #     non_var_ys.append(star["params"][paramy])
+            #     non_var_xs.append(star["params"][paramx])
 
         plt.plot(non_var_xs, non_var_ys, "bx", label="non_variable")
         plt.plot(var_xs, var_ys, "rx", label="variable")
@@ -207,8 +210,9 @@ class new_stars(object):
         for i, star in enumerate(self.res):
             if star["kic"] in self.variables:
                 var_xs.append(star["params"][param])
-            elif star["kic"] in self.non_variables:
-                non_var_xs.append(star["params"][param])
+            # elif star["kic"] in self.non_variables:
+            #     non_var_xs.append(star["params"][param])
+            non_var_xs.append(star["params"][param])
 
         non_var_dic = Counter(non_var_xs)
         var_dic = Counter(var_xs)
@@ -237,8 +241,9 @@ class new_stars(object):
         for i, star in enumerate(self.res):
             if star["kic"] in self.variables:
                 var_xs.append(star["params"][param])
-            elif star["kic"] in self.non_variables:
-                non_var_xs.append(star["params"][param])
+            # elif star["kic"] in self.non_variables:
+            #     non_var_xs.append(star["params"][param])
+            non_var_xs.append(star["params"][param])
 
         var_xs = np.array(var_xs)
         non_var_xs = np.array(non_var_xs)
