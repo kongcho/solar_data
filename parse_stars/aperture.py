@@ -339,7 +339,7 @@ def is_second_star(img, xi0j0, xi0j1, xi0j2, xi1j0, xi2j0, factor=0.75):
                 ]
     return all(booleans)
 
-
+def remove_second_star(img, min_factor):
     """
     helper for improve_aperture, removes any detected second stars by pixel
     """
@@ -501,7 +501,7 @@ def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
     :mask_factor: factor multiplied maximum of given PSF from lightkurve
     :image_region: distance from center of pixel as part of aperture
 
-    :return: mask (1s, 0s) as image
+    :return: mask (1s, 0s) as image, all 1s if no channel available
     """
     tar = target.target
     channel = [tar.params['Channel_0'], tar.params['Channel_1'],
@@ -510,6 +510,8 @@ def calculate_aperture_mask(target, mask_factor=0.001, image_region=15):
         if chan is not None:
             first_channel = chan
             break
+    else:
+        return np.ones((image_region*2, image_region*2))
     kepprf = lk.KeplerPRF(channel=first_channel, shape=(image_region*2, image_region*2), \
                           column=image_region, row=image_region)
     prf = kepprf(flux=1000, center_col=image_region*2, center_row=image_region*2, \
