@@ -278,8 +278,8 @@ class model(object):
                 self._setup_res(sine_label, \
                                 self.make_scipy_model(self._sine_model, self._simple_err_func, \
                                                       [amp, freq, 0], \
-                                                      ([0, 0, -np.inf], \
-                                                       [np.inf, np.inf, np.inf])), 3)
+                                                      ([-np.inf, -np.inf, -np.inf], \
+                                                       [np.inf, 0.002, np.inf])), 3)
         logger.info("done")
         return 0
 

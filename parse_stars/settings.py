@@ -1,7 +1,3 @@
-"""
-GLOBAL VARIABLES AND LOCATIONS AND CODE LOGGING TO SETUP CODE
-"""
-
 import logging
 import sys
 import os
