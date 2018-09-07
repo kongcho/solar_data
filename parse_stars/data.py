@@ -2,7 +2,7 @@
 FUNCTIONS THAT GETS RIGHT PARAMETERS FOR EACH STAR / FILTER PARAMETERS
 """
 
-from utils import get_nth_kics
+from utils import get_nth_kics, format_arr
 from settings import setup_logging, mpl_setup
 from api import api
 from aperture import run_photometry, calculate_better_aperture, model_background
@@ -57,10 +57,10 @@ class new_stars(object):
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param == "variable":
-                    # self.get_is_variable()
+                    self.get_is_variable()
 
-                    self.get_params([param])
-                    self.setup_self_variable()
+                    # self.get_params([param])
+                    # self.setup_self_variable()
                 elif param == "closest_edge":
                     self.get_edge_distance()
                 else:
@@ -157,12 +157,13 @@ class new_stars(object):
             star["params"]["curve_fit"] = label
             star["params"]["var_bic"] = bic
             star["params"]["var_chi2"] = ssr
+            star["params"]["var_res"] = format_arr(m.format_res, ",")
             if res:
                 self.variables.append(star["kic"])
             else:
                 self.non_variables.append(star["kic"])
             logger.info("done: %s, %s" % (star["kic"], label))
-        self.params += ["variable", "curve_fit", "var_bic", "var_chi2"]
+        self.params += ["variable", "curve_fit", "var_bic", "var_chi2", "var_res"]
         return 0
 
     def setup_self_variable(self):
@@ -267,6 +268,7 @@ class new_stars(object):
     def print_params(self, fout, params):
         self._check_params(params)
         header = ["kic"] + params
+        print header
         with open(fout, "w") as f:
             w = csv.writer(f, delimiter=",", lineterminator="\n")
             w.writerow(header)

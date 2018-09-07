@@ -75,9 +75,8 @@ def print_models(kics):
         plt.show()
 
 def output(kics, n):
-    params = ["variable", "curve_fit", "var_chi2", "var_bic"]
+    params = ["variable", "curve_fit", "var_chi2", "var_bic", "var_res"]
     fout = "var_out_%d.out" % n
-    print fout
     ns = new_stars(kics)
     ns.print_params(fout, params)
     print "-------------------- OUTPUT %d DONE" % n
@@ -130,23 +129,24 @@ def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)[:20]
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
     # kics = get_nth_kics("./data/table4.dat", 5000, 1, 0, " ", 0)
     # kics = ["9083355"]
 
-    features = ["teff", "dist", "rad", "avs", "evState", "binaryFlag", \
-                "logg", "metallicity", "rho", "av", \
-                "prot", "rper", "LPH", "closest_edge"]
+    # features = ["teff", "dist", "rad", "avs", "evState", "binaryFlag", \
+    #             "logg", "metallicity", "rho", "av", \
+    #             "prot", "rper", "LPH", "closest_edge"]
 
     # randfor(1)
-    n = new_stars(kics)
-    n.get_is_variable()
 
-    kics = ["757099", "893730", "893750","1026669","1027030","1028012","1028640",\
-            "1160947", "1161345","1161432","1163211"]
-    # kics += ["893234", "1026647", "1163579"]
+    # n = new_stars(kics)
+    # n.get_is_variable()
 
-    m = new_stars(kics)
+    # kics = ["757099", "893730", "893750","1026669","1027030","1028012","1028640",\
+    #         "1160947", "1161345","1161432","1163211"]
+    # kics = ["893234", "1026647", "1163579"]
+
+    do_multiprocess(10, run_kics, output, kics)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

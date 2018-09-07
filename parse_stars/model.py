@@ -1,9 +1,5 @@
-"""
-FUNCTIONS THAT DETERMINES A STAR'S VARIABILITY FROM LIGHT CURVE
-"""
-
 from aperture import run_photometry
-
+from utils import format_arr
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.modeling import models, fitting
@@ -41,7 +37,7 @@ class model(object):
         if qs:
             self.qs = np.array(qs)[self.index]
             self.fmts = self._setup_fmts(qs)[self.index] \
-                        if (not fmts and len(fmts) != len(y)) else np.array(fmts)
+                        if (not fmts or len(fmts) != len(y)) else np.array(fmts)
         else:
             self.qs = qs
             self.fmts = None
@@ -68,18 +64,22 @@ class model(object):
     def _simple_err_func(self, inits, x, y, model_func):
         return model_func(x, inits) - y
 
-    def make_scipy_model(self, model_func, err_func, init_arr):
-        p, success = optimize.leastsq(err_func, init_arr, args=(self.x, self.y, model_func), \
-                                      maxfev=2000)
-        model = model_func(self.x, p)
-        return model
+    def make_scipy_model(self, model_func, err_func, init_arr, bounds=(-np.inf, np.inf)):
+        res = optimize.least_squares(err_func, init_arr, args=(self.x, self.y, model_func), \
+                                     method="dogbox", bounds=bounds, max_nfev=2000)
+        model = model_func(self.x, res.x)
+        return model, res.x
 
-    def make_astropy_model(self, model_func, fitting, *args, **kwargs):
+    def make_astropy_model(self, model_func, fitting, var_names, *args, **kwargs):
         init = model_func(*args, **kwargs)
         fit = fitting
         m = fit(init, self.x, self.y)
+        p = []
+        for name in var_names:
+            attr = getattr(m, name)
+            p.append(attr.value)
         model = m(self.x)
-        return model
+        return model, p
 
     def plot_many_lines(self, **kwargs):
         fig = plt.figure(figsize=(10, 5))
@@ -93,7 +93,7 @@ class model(object):
         plt.ylabel("Flux")
 
         for i, res in enumerate(self.reses):
-            label, model, k = res
+            label, model, p, k = res
             plt.plot(self.x, model, label=label, linewidth=0.5, **kwargs)
 
         plt.legend(loc="upper right")
@@ -110,7 +110,7 @@ class model(object):
         ax[0].set_title("Original")
 
         for i, res in enumerate(self.reses, 1):
-            label, model, k = res
+            label, model, p, k = res
             ax[i].plot(self.x, model, label=label, fmt='k+', **kwargs)
             ax[i].set_title(label)
             # ax[i].axis('off')
@@ -174,52 +174,69 @@ class model(object):
         return 0
 
     def _determine_accuracy(self, res):
-        label, model, k = res
+        label, model, p, k = res
         acc = self._get_bic(model, k)
         return acc
+
+    def _sort_accuracies(self):
+        bics = []
+        ssrs = []
+        labs = []
+        self.format_res = []
+        for res in self.reses:
+            label, model, p, k = res
+            bic, ssr = self._determine_accuracy(res)
+            bics.append(bic)
+            ssrs.append(ssr)
+            labs.append(label)
+            self.format_res += [bic, "[" + format_arr(p, ",") + "]"]
+        bics = np.array(bics)
+        labs = np.array(labs)
+
+        idxs = np.argsort(bics)
+        sorted_labs = labs[idxs]
+        sorted_bics = bics[idxs]
+        sorted_ssrs = ssrs[idxs]
+
+        unique_labs = []
+        unique_idxs = []
+        unique_ssrs = []
+        for i, lab in enumerate(sorted_labs):
+            if lab not in unique_labs:
+                unique_labs.append(lab)
+                unique_idxs.append(idxs[i])
+        print labs[unique_idxs], bics[unique_idxs]
+
+        # diffs = np.abs(np.diff(bics[unique_idxs]))
+        # if diffs[0] <= 1:
+        #     print "OMGG HERE", labs[unique_idxs], bics[unique_idxs]
+        #     self.plot_many_lines()
+        #     plt.savefig(unique_labs[0] + "_" + str(bics[unique_idxs[0]]) + "_" + \
+        #                 unique_labs[1] + "_" + str(bics[unique_idxs[1]]) + ".png")
+        #     plt.close("all")
+        return labs[unique_idxs], bics[unique_idxs]
 
     def _get_best_accuracies(self):
         bics = []
         ssrs = []
-        labs = [] #TBD
+        self.format_res = []
         for res in self.reses:
+            label, model, p, k = res
             bic, ssr = self._determine_accuracy(res)
             bics.append(bic)
             ssrs.append(ssr)
-            labs.append(res[0]) #TBD
+            self.format_res += [bic, "[" + format_arr(p, ",") + "]"]
+        self.bics = np.array(bics)
+        self.ssrs = np.array(ssrs)
 
-        idxs = np.argsort(bics) #TBD ---->
-        bics = np.array(bics)
-        labs = np.array(labs)
-        new_labs = labs[idxs]
-        new_bics = bics[idxs]
-
-        good_labs = []
-        good_idxs = []
-        for i, lab in enumerate(new_labs):
-            if lab not in good_labs:
-                good_labs.append(lab)
-                good_idxs.append(idxs[i])
-
-        print good_idxs, labs[good_idxs], bics[good_idxs]
-        diffs = np.abs(np.diff(bics[good_idxs]))
-        if diffs[0] <= 1:
-            print "OMGG HERE", labs[good_idxs], bics[good_idxs]
-            self.plot_many_lines()
-            plt.savefig(good_labs[0] + "_" + str(bics[good_idxs[0]]) + "_" + \
-                        good_labs[1] + "_" + str(bics[good_idxs[1]]) + ".png")
-            plt.close("all")
-
-        # TBD <------------------
-        best_i = np.argmin(bics)
-        best_bic = bics[best_i]
-        best_ssr = ssrs[best_i]
+        best_i = np.argmin(self.bics)
+        best_bic = self.bics[best_i]
+        best_ssr = self.ssrs[best_i]
         best_lab = self.reses[best_i][0]
         return best_i, best_lab, best_bic, best_ssr
 
     def _estimate_freqs(self, times, min_years=2, max_years=13, times_per_year=0.25):
-        qt_factor = np.ptp(times)/(18*90)
-        print qt_factor
+        qt_factor = 1
         year_factor = 365*qt_factor
         good_periods = np.arange(1, max_years, times_per_year)*year_factor
 
@@ -235,17 +252,20 @@ class model(object):
         return np.arange(min_val, max_ys, range_ys/n)
 
     def _setup_res(self, label, model_res, k_params):
-        self.reses.append((label, model_res, k_params))
+        model, p = model_res
+        self.reses.append((label, model, p, k_params))
         return 0
 
     def run_through_models(self):
         self._setup_res("Const1D", \
-                        self.make_astropy_model(models.Const1D, fitting.LinearLSQFitter()), 1)
+                        self.make_astropy_model(models.Const1D, fitting.LinearLSQFitter(), \
+                                                ["amplitude"]), 1)
         self._setup_res("Linear1D", \
-                        self.make_astropy_model(models.Linear1D, fitting.LinearLSQFitter()), 2)
+                        self.make_astropy_model(models.Linear1D, fitting.LinearLSQFitter(), \
+                                                ["slope", "intercept"]), 2)
         self._setup_res("Parabola1D", \
-                        self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), 2),\
-                        3)
+                        self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), \
+                                                ["c0", "c1", "c2"], 2), 3)
 
         # damped_sine_inits = [0.01, 0.001, 0.001, 0]
         # self._setup_res("DampedSine", \
@@ -254,12 +274,12 @@ class model(object):
 
         for freq in self._estimate_freqs(self.x, 2, 13, 0.25):
             for amp in self._estimate_amps(self.y, 5):
-                # sine_label = "Sine1D %f %f" % (freq, amp)
                 sine_label = "Sine1D"
                 self._setup_res(sine_label, \
                                 self.make_scipy_model(self._sine_model, self._simple_err_func, \
-                                                      [amp, freq, 0]), 3)
-
+                                                      [amp, freq, 0], \
+                                                      ([0, 0, -np.inf], \
+                                                       [np.inf, np.inf, np.inf])), 3)
         logger.info("done")
         return 0
 
@@ -280,7 +300,8 @@ class model(object):
             if labels[0] == "Sine1D":
                 freq = float(labels[1])
                 amp = float(labels[2])
-                model = self.make_scipy_model(self._sine_model, self._simple_err_func, [amp, freq, 0])
+                model = self.make_scipy_model(self._sine_model, self._simple_err_func, \
+                                              [amp, freq, 0], (None, np.inf))
                 k = 3
         return self._get_ssr(model), self._get_bic(model, k)
 
