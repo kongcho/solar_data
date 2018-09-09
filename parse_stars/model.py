@@ -238,7 +238,7 @@ class model(object):
     def _estimate_freqs(self, times, min_years=2, max_years=13, times_per_year=0.25):
         qt_factor = 1
         year_factor = 365*qt_factor
-        good_periods = np.arange(1, max_years, times_per_year)*year_factor
+        good_periods = np.arange(min_years, max_years, times_per_year)*year_factor
 
         good_freqs = np.divide(1.0, good_periods)
         filtered_is = np.isposinf(good_freqs)

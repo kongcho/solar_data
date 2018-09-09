@@ -8,6 +8,7 @@ import os
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -82,9 +83,7 @@ def output(kics, n):
     print "-------------------- OUTPUT %d DONE" % n
     return 0
 
-def randfor(factor):
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
-
+def randfor(kics, factor):
     features = ["teff", "dist", "rad", "avs", "evState", "binaryFlag", \
                 "logg", "metallicity", "rho", "av", \
                 "prot", "rper", "LPH", "closest_edge"]
@@ -129,7 +128,7 @@ def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+    kics = get_nth_col("./data/table4.dat", 0, " ", 0)[:1]
     # kics = get_nth_kics("./data/table4.dat", 5000, 1, 0, " ", 0)
     # kics = ["9083355"]
 
@@ -146,7 +145,9 @@ def main():
     #         "1160947", "1161345","1161432","1163211"]
     # kics = ["893234", "1026647", "1163579"]
 
-    do_multiprocess(10, run_kics, output, kics)
+    do_multiprocess(1, run_kics, output, kics)
+    # randfor(kics, 1)
+    # randfor(kics, 0.7)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")
