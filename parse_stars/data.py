@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from sklearn.feature_selection import RFECV
-from sklearn.cross_validation import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
 class new_stars(object):
@@ -56,11 +56,11 @@ class new_stars(object):
             if param not in self.params:
                 if param == "luminosity":
                     self.get_luminosity()
-                elif param == "variable":
-                    self.get_is_variable()
+                elif param in ["variable"]:
+                    # self.get_is_variable()
 
-                    # self.get_params([param])
-                    # self.setup_self_variable()
+                    self.get_params([param])
+                    self.setup_self_variable()
                 elif param == "closest_edge":
                     self.get_edge_distance()
                 else:
@@ -155,27 +155,56 @@ class new_stars(object):
             res, label, bic, ssr = m.is_variable()
             star["params"]["variable"] = res
             star["params"]["curve_fit"] = label
-            star["params"]["var_bic"] = bic
-            star["params"]["var_chi2"] = ssr
-            star["params"]["var_res"] = format_arr(m.format_res, ",")
+            star["params"]["var_bic_best"] = bic
+            star["params"]["var_chi2_best"] = ssr
+            star["params"]["var_res"] = m.format_res
             if res:
                 self.variables.append(star["kic"])
             else:
                 self.non_variables.append(star["kic"])
             logger.info("done: %s, %s" % (star["kic"], label))
-        self.params += ["variable", "curve_fit", "var_bic", "var_chi2", "var_res"]
+        self.params += ["variable", "curve_fit", "var_bic_best", "var_chi2_best", "var_res"]
         return 0
 
+    def _check_var_params(self, arr):
+        labels_other = ["Linear1D", "Parabola1D", "best_Sine1D"]
+        label_flat = "Const1D"
+        bic_flat = arr[0]
+        bics_other = arr[2:8:2]
+        best_i = np.argmin(bics_other)
+        bic_var = bics_other[best_i]
+        label_var = labels_other[best_i]
+        return bic_flat, label_flat, bic_var, label_var
+
+    def _calc_bic_prob(self, bic_flat, bic_var):
+        p_var = np.divide(1, 1 + np.exp(0.5 * (bic_var - bic_flat)))
+        return p_var
+
     def setup_self_variable(self):
-        self._check_params(["variable"])
         self.variables = []
         self.non_variables = []
         for i, star in enumerate(self.res):
-            if star["params"]["variable"]:
+            pars = star["params"]
+
+            # setup self.variables, self.non_variables
+            if pars["variable"]:
                 self.variables.append(star["kic"])
             else:
                 self.non_variables.append(star["kic"])
-        return 0
+
+            # get relevant bics / results
+            try:
+                bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
+                pars["var_bic_flat"] = bic_flat
+                pars["var_bic_var"] = bic_var
+                pars["var_label_var"] = label_var
+                pars["var_prob"] = self._calc_bic_prob(bic_flat, bic_var)
+
+            except Exception as e:
+                logger.error("variables table missing data for %s" % star["kic"])
+
+            self.params += ["var_bic_flat", "var_bic_var", "var_label_var", "var_prob"]
+            return 0
 
     def plot_variable_params(self, paramy, paramx):
         self._check_params(["variable", paramy, paramx])
@@ -211,8 +240,10 @@ class new_stars(object):
         for i, star in enumerate(self.res):
             if star["kic"] in self.variables:
                 var_xs.append(star["params"][param])
+
             # elif star["kic"] in self.non_variables:
             #     non_var_xs.append(star["params"][param])
+
             non_var_xs.append(star["params"][param])
 
         non_var_dic = Counter(non_var_xs)
@@ -242,9 +273,8 @@ class new_stars(object):
         for i, star in enumerate(self.res):
             if star["kic"] in self.variables:
                 var_xs.append(star["params"][param])
-            # elif star["kic"] in self.non_variables:
-            #     non_var_xs.append(star["params"][param])
-            non_var_xs.append(star["params"][param])
+            elif star["kic"] in self.non_variables:
+                non_var_xs.append(star["params"][param])
 
         var_xs = np.array(var_xs)
         non_var_xs = np.array(non_var_xs)
@@ -268,19 +298,22 @@ class new_stars(object):
     def print_params(self, fout, params):
         self._check_params(params)
         header = ["kic"] + params
-        print header
         with open(fout, "w") as f:
             w = csv.writer(f, delimiter=",", lineterminator="\n")
             w.writerow(header)
             for i, star in enumerate(self.res):
                 arr = [star["kic"]]
-                for param in params:
-                    arr.append(star["params"][param])
-                w.writerow(arr)
+                try:
+                    for param in params:
+                        arr.append(star["params"][param])
+                    w.writerow(arr)
+                except Exception as e:
+                    logger.error("param %s doesn't exist for %s: %s" % \
+                                 (param, star["kic"], e.message))
         logger.info("done")
         return 0
 
-    def _setup_skl(self, params):
+    def _setup_skl(self, params, target_param):
         self._check_params(["variable"] + params)
         variables = []
         data = []
@@ -296,7 +329,7 @@ class new_stars(object):
                     good_pars.append(pars[par])
             else:
                 data.append(good_pars)
-                variables.append(pars["variable"])
+                variables.append(pars[target_param])
         return data, variables
 
     def prune_params(self, fitting, data, variables):
@@ -306,9 +339,9 @@ class new_stars(object):
         logger.info("done: %s" % param_rank)
         return params[rfe.support_]
 
-    def do_random_forest(self, params, train_factor):
-        clf = RandomForestClassifier()
-        all_dat, all_vars = self._setup_skl(params)
+    def do_random_forest(self, params, target_param, train_factor):
+        clf = RandomForestRegressor()
+        all_dat, all_vars = self._setup_skl(params, target_param)
         if not all_dat and not all_vars:
             logger.error("not enough data")
             return 1
@@ -317,6 +350,7 @@ class new_stars(object):
             train_x, train_y = all_dat, all_vars
             test_x, test_y = all_dat, all_vars
         else:
+            pass
             train_x, test_x, \
                 train_y, test_y = train_test_split(all_dat, all_vars, train_size=train_factor)
 

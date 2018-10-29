@@ -20,7 +20,7 @@ kepmag_file_prefix = data_folder + "kepler_fov_search"
 filename_lc_img = results_folder + "lc_data_img.out"
 filename_lc_new = results_folder + "lc_data_new.out"
 filename_lc_old = results_folder + "lc_data_old.out"
-filename_lc_var = results_folder + "lc_data_var.out"
+filename_lc_var = results_folder + "trf_var_out_FINAL.out"
 filename_lc_obs = data_folder + "obs_info.txt"
 
 ## Output Files to change

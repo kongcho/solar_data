@@ -205,15 +205,6 @@ class model(object):
             if lab not in unique_labs:
                 unique_labs.append(lab)
                 unique_idxs.append(idxs[i])
-        print labs[unique_idxs], bics[unique_idxs]
-
-        # diffs = np.abs(np.diff(bics[unique_idxs]))
-        # if diffs[0] <= 1:
-        #     print "OMGG HERE", labs[unique_idxs], bics[unique_idxs]
-        #     self.plot_many_lines()
-        #     plt.savefig(unique_labs[0] + "_" + str(bics[unique_idxs[0]]) + "_" + \
-        #                 unique_labs[1] + "_" + str(bics[unique_idxs[1]]) + ".png")
-        #     plt.close("all")
         return labs[unique_idxs], bics[unique_idxs]
 
     def _get_best_accuracies(self):
@@ -267,11 +258,6 @@ class model(object):
                         self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), \
                                                 ["c0", "c1", "c2"], 2), 3)
 
-        # damped_sine_inits = [0.01, 0.001, 0.001, 0]
-        # self._setup_res("DampedSine", \
-        #                 self.make_scipy_model(self._damped_sine_model, self._simple_err_func, \
-        #                                       damped_sine_inits), len(damped_sine_inits))
-
         for freq in self._estimate_freqs(self.x, 2, 13, 0.25):
             for amp in self._estimate_amps(self.y, 5):
                 sine_label = "Sine1D"
@@ -307,6 +293,7 @@ class model(object):
 
     def is_variable(self):
         if np.all(np.isnan(self.y)):
+            self.format_res = str([np.nan])
             return False, "Unsure", np.nan, np.nan
 
         self.run_through_models()

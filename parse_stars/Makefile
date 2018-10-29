@@ -1,6 +1,6 @@
 setup:
-	virtualenv --python=python venv
-	venv/bin/pip install -r ./requirements.txt
+	virtualenv --python=python2 venv
+	venv/bin/pip2 install -r ./requirements.txt
 
 run:
 	venv/bin/python ./main.py

@@ -8,7 +8,7 @@ import os
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 
 def make_sound(duration=0.3, freq=440):
     os.system('play --no-show-progress --null --channels 1 synth %s sine %f' % (duration, freq))
@@ -86,15 +86,15 @@ def output(kics, n):
 def randfor(kics, factor):
     features = ["teff", "dist", "rad", "avs", "evState", "binaryFlag", \
                 "logg", "metallicity", "rho", "av", \
-                "prot", "rper", "LPH", "closest_edge"]
+                "prot", "rper", "LPH"]
 
     n = new_stars(kics)
-    res = n.do_random_forest(features, factor)
+    n._check_params(features)
+    res = n.do_random_forest(features, "var_prob", factor)
     if res != 1:
-        params = n.prune_params(RandomForestClassifier, res[0], res[1])
+        params = n.prune_params(RandomForestRegressor(), res[0], res[1])
         print "PARAMSHERE", params
-        res_new = n.do_random_forest(params, factor)
-
+        res_new = n.do_random_forest(params, "var_prob", factor)
     return 0
 
 def plot_hists(n, tot, params):
@@ -128,7 +128,7 @@ def main():
     logger.info("### starting ###")
     np.set_printoptions(linewidth=1000) #, precision=4)
 
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)[:1]
+    # kics = get_nth_col("./data/table4.dat", 0, " ", 0)[:4]
     # kics = get_nth_kics("./data/table4.dat", 5000, 1, 0, " ", 0)
     # kics = ["9083355"]
 
@@ -137,7 +137,7 @@ def main():
     #             "prot", "rper", "LPH", "closest_edge"]
 
     # randfor(1)
-
+ 
     # n = new_stars(kics)
     # n.get_is_variable()
 
@@ -145,9 +145,17 @@ def main():
     #         "1160947", "1161345","1161432","1163211"]
     # kics = ["893234", "1026647", "1163579"]
 
-    do_multiprocess(1, run_kics, output, kics)
+    # do_multiprocess(1, run_kics, output, kics)
     # randfor(kics, 1)
     # randfor(kics, 0.7)
+
+    # kics = get_nth_col("./results/var_out_8.out", 0, ",", 1)[:100:2]
+    # randfor(kics, 1)
+
+    params = ["variable", "curve_fit", "var_chi2_best", "var_bic_best", "var_res"]
+    kics = get_nth_col("./errors.txt")[:15]
+    n = new_stars(kics)
+    n.print_params("./test.txt", params)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

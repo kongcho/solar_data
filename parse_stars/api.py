@@ -6,6 +6,7 @@ logger = settings.setup_logging()
 
 import kplr
 import numpy as np
+import ast
 
 class api(object):
     """
@@ -73,6 +74,7 @@ class api(object):
             self._update_params(new_params, self.get_mast_params(kics, mast_pars))
         except Exception as e:
             logger.error("can't retrieve mast params: %s-%s" % (e.message, mast_pars))
+
         # self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
         self._check_params_dic(new_params, periodic_pars)
@@ -291,25 +293,32 @@ class api(object):
         reses = [curr_params]*len(kics)
         return reses
 
+    def _parse_var_params(self, string):
+        parse_string = "[" + string + "]"
+        literal_vals = ast.literal_eval(parse_string)
+        return literal_vals
+
     def get_variable(self, kics, lc_file):
         """
         gets if star is variable or not with Chi-squared values from our database
         """
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
-        arrs = t.parse_table_arrs(range(1, 5), kics=kics, types=[str, str, float, float])
+        arrs = t.parse_table_arrs(range(1, 6), kics=kics, types=[str, str, float, float, str])
         reses = []
         for i, kic in enumerate(kics):
             curr_params = {}
             arr = arrs[i]
             if len(arr) == 0:
                 curr_params["variable"], curr_params["curve_fit"], \
-                    curr_params["var_chi2"], curr_params["var_bic"] = (np.nan for _ in range(4))
+                    curr_params["var_chi2_best"], \
+                    curr_params["var_bic_best"] = (np.nan for _ in range(4))
                 logger.error("couldn't parse table for this kic: %s" % kic)
             else:
                 curr_params["variable"] = 1 if arr[0] == "True" else 0
                 curr_params["curve_fit"] = arr[1]
-                curr_params["var_chi2"] = arr[2]
-                curr_params["var_bic"] = arr[3]
+                curr_params["var_chi2_best"] = arr[2]
+                curr_params["var_bic_best"] = arr[3]
+                curr_params["var_res"] = self._parse_var_params(arr[4])
             reses.append(curr_params)
         return reses
 
