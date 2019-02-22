@@ -76,7 +76,7 @@ def print_models(kics):
         plt.show()
 
 def output(kics, n):
-    params = ["variable", "curve_fit", "var_chi2", "var_bic", "var_res"]
+    params = ["variable", "var_bic_flat", "var_bic_var", "var_label_var", "var_prob", "var_res"]
     fout = "var_out_%d.out" % n
     ns = new_stars(kics)
     ns.print_params(fout, params)
@@ -145,17 +145,19 @@ def main():
     #         "1160947", "1161345","1161432","1163211"]
     # kics = ["893234", "1026647", "1163579"]
 
-    # do_multiprocess(1, run_kics, output, kics)
+
     # randfor(kics, 1)
     # randfor(kics, 0.7)
 
     # kics = get_nth_col("./results/var_out_8.out", 0, ",", 1)[:100:2]
     # randfor(kics, 1)
 
-    params = ["variable", "curve_fit", "var_chi2_best", "var_bic_best", "var_res"]
-    kics = get_nth_col("./errors.txt")[:15]
-    n = new_stars(kics)
-    n.print_params("./test.txt", params)
+    # params = ["variable", "var_bic_flat", "var_bic_var", "var_label_var", "var_prob", "var_res"]
+    kics = get_nth_col("./data/kics.out")[:200:99]
+    # n = new_stars(kics)
+    # n.print_params("./test.txt", params)
+
+    do_multiprocess(1, run_kics, output, kics)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")

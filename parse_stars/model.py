@@ -20,27 +20,44 @@ class model(object):
         x = np.array(x)
         y = np.array(y)
         self.index = ~(np.isnan(y))
-        self.x = x[self.index]
-        self.y = y[self.index]
+        self.x_dat = x[self.index]
+        self.y_dat = y[self.index]
         if xerr:
             new_xerr = np.array(xerr)[self.index]
             new_xerr[np.isnan(new_xerr)] = 0
-            self.xerr = new_xerr
+            self.xerr_dat = new_xerr
         else:
-            self.xerr = xerr
+            self.xerr_dat = xerr
         if yerr:
             new_yerr = np.array(yerr)[self.index]
             new_yerr[np.isnan(new_yerr)] = 0
-            self.yerr = new_yerr
+            self.yerr_dat = new_yerr
         else:
-            self.yerr = yerr
+            self.yerr_dat = yerr
+
         if qs:
-            self.qs = np.array(qs)[self.index]
-            self.fmts = self._setup_fmts(qs)[self.index] \
-                        if (not fmts or len(fmts) != len(y)) else np.array(fmts)
+            self.qs_dat = np.array(qs)[self.index]
+            self.fmts = self._setup_fmts(qs) \
+                if (not fmts or len(fmts) != len(y)) else np.array(fmts)
+            self.fmts_dat = self.fmts[self.index]
         else:
-            self.qs = qs
-            self.fmts = None
+            self.qs_dat = qs
+            self.fmts_dat = None
+
+        med_y = np.array(np.median(y[:8]))
+        med_i = 0
+        self.med_i = med_i
+        y_short = np.array(np.insert(y[8:], 0, med_y))
+        x_short = np.array(np.insert(x[8:], 0, x[med_i]))
+        yerr_short = np.array(np.insert(yerr[8:], 0, yerr[med_i]))
+        qs_short = np.array(np.insert(qs[8:], 0, qs[med_i]))
+        fmts_short = np.array(np.insert(self.fmts[8:], 0, self.fmts[med_i]))
+        index_short = ~(np.isnan(y_short))
+        self.x = x_short[index_short]
+        self.y = y_short[index_short]
+        self.qs = qs_short[index_short]
+        self.fmts = fmts_short[index_short]
+        self.yerr = yerr_short[index_short]
         self.reses = []
 
     def _setup_fmts(self, qs):
@@ -129,7 +146,7 @@ class model(object):
     def _get_jitter_ssr(self, j, model, data, yerr):
         s = np.sqrt(yerr**2 + j**2)
         ssr = self._get_ssr(model, data, s)
-        d = np.abs(ssr - len(model))
+        d = (ssr - len(model))**2
         return d
 
     def _get_jitter(self, model, gs):
@@ -137,9 +154,6 @@ class model(object):
         bnds = [(0, None)]
         res = optimize.minimize(self._get_jitter_ssr, init, \
                                 args=(model[gs], self.y[gs], self.yerr[gs]), bounds=bnds)
-        s = np.sqrt(self.yerr[gs]**2 + res.x**2)
-        ssr = self._get_ssr(model[gs], self.y[gs], s)
-        d = np.abs(ssr - np.array(len(gs)))
         return res.x
 
     def _get_jitter_grid(self, model, gs):
@@ -159,18 +173,15 @@ class model(object):
         return best_j
 
     def fix_errors(self):
-        ssrs = [self._get_ssr(res[1], self.y, self.yerr) for res in self.reses]
-        ssrs = [np.nan if ssr == 0.0 else ssr for ssr in ssrs]
-        best_i = np.nanargmin(ssrs) if not np.all(np.isnan(ssrs)) else np.argmin(ssrs)
-        model = self.reses[best_i][1]
+        model = self.reses[0][1]
         ran = 4 if np.any(self.qs) else 1
         for i in range(ran):
             gs = np.where(np.array(self.qs) == i)[0]
-            jitter = self._get_jitter_grid(model, gs)
             jitter = self._get_jitter(model, gs)
             new_err = np.sqrt(self.yerr[gs]**2 + jitter**2)
             self.yerr[gs] = [err if (not (np.isnan(err) or err == 0.0)) else self.yerr[gs[i]] \
                              for i, err in enumerate(new_err)]
+        self.yerr_dat = np.concatenate((np.repeat(self.yerr[0], 8), self.yerr[1:]))
         return 0
 
     def _determine_accuracy(self, res):
@@ -211,12 +222,27 @@ class model(object):
         bics = []
         ssrs = []
         self.format_res = []
-        for res in self.reses:
+        for res in self.reses[:3]:
             label, model, p, k = res
             bic, ssr = self._determine_accuracy(res)
             bics.append(bic)
             ssrs.append(ssr)
             self.format_res += [bic, "[" + format_arr(p, ",") + "]"]
+
+        best_bic = float("inf")
+        cur_bic = cur_ssr = cur_p = None
+        for res in self.reses[3:]:
+            label, model, p, k = res
+            bic, ssr = self._determine_accuracy(res)
+            if bic <= best_bic:
+                cur_bic = bic
+                cur_ssr = ssr
+                cur_p = p
+        bics.append(cur_bic)
+        ssrs.append(cur_ssr)
+        self.format_res += [bic, "[" + format_arr(cur_p, ",") + "]"]
+
+
         self.bics = np.array(bics)
         self.ssrs = np.array(ssrs)
 
@@ -247,17 +273,25 @@ class model(object):
         self.reses.append((label, model, p, k_params))
         return 0
 
-    def run_through_models(self):
-        self._setup_res("Const1D", \
-                        self.make_astropy_model(models.Const1D, fitting.LinearLSQFitter(), \
-                                                ["amplitude"]), 1)
-        self._setup_res("Linear1D", \
-                        self.make_astropy_model(models.Linear1D, fitting.LinearLSQFitter(), \
-                                                ["slope", "intercept"]), 2)
-        self._setup_res("Parabola1D", \
-                        self.make_astropy_model(models.Polynomial1D, fitting.LinearLSQFitter(), \
-                                                ["c0", "c1", "c2"], 2), 3)
+    def run_const_model(self):
+        return self._setup_res("Const1D", \
+                               self.make_astropy_model(models.Const1D, \
+                                                       fitting.LinearLSQFitter(), \
+                                                       ["amplitude"]), 1)
 
+    def run_linear_model(self):
+        return self._setup_res("Linear1D", \
+                               self.make_astropy_model(models.Linear1D, \
+                                                       fitting.LinearLSQFitter(), \
+                                                       ["slope", "intercept"]), 2)
+
+    def run_parabola_model(self):
+        return self._setup_res("Parabola1D", \
+                               self.make_astropy_model(models.Polynomial1D, \
+                                                       fitting.LinearLSQFitter(), \
+                                                       ["c0", "c1", "c2"], 2), 3)
+
+    def run_sines_model(self):
         for freq in self._estimate_freqs(self.x, 2, 13, 0.25):
             for amp in self._estimate_amps(self.y, 5):
                 sine_label = "Sine1D"
@@ -266,6 +300,14 @@ class model(object):
                                                       [amp, freq, 0], \
                                                       ([-np.inf, -np.inf, -np.inf], \
                                                        [np.inf, 0.002, np.inf])), 3)
+        return 0
+
+    def run_through_models(self):
+        self.reses = []
+        self.run_const_model()
+        self.run_linear_model()
+        self.run_parabola_model()
+        self.run_sines_model()
         logger.info("done")
         return 0
 
@@ -289,15 +331,16 @@ class model(object):
                 model = self.make_scipy_model(self._sine_model, self._simple_err_func, \
                                               [amp, freq, 0], (None, np.inf))
                 k = 3
-        return self._get_ssr(model), self._get_bic(model, k)
+        return self._get_ssr(model), self._get_bic(mode1l, k)
 
     def is_variable(self):
         if np.all(np.isnan(self.y)):
             self.format_res = str([np.nan])
             return False, "Unsure", np.nan, np.nan
 
-        self.run_through_models()
+        self.run_const_model()
         self.fix_errors()
+        self.run_through_models()
 
         best_i, best_lab, best_bic, best_ssr = self._get_best_accuracies()
         bools = [not best_lab == "Const1D"]

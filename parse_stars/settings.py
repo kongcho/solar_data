@@ -14,6 +14,7 @@ filename_periods = data_folder + "Table_Periodic.txt"
 filename_nonperiods = data_folder + "Table_Non_Periodic.txt"
 filename_stellar_params = data_folder + "table4.dat"
 filename_mast_table = data_folder + "kepler_fov_search_all.txt"
+filename_kic10_table = data_folder + "kic.txt"
 filename_gaia_table = data_folder + "DR2PapTable1.txt"
 kepmag_file_prefix = data_folder + "kepler_fov_search"
 
@@ -173,6 +174,55 @@ nonperiodic_dic = {
     "LPH": ("LPH", float),
     "w": ("w", float),
     "DC": ("DC", int),
+}
+
+kic10_dic_keys = ["kic_ra", "kic_dec", "kic_pmra", "kic_pmdec", "kic_umag", "kic_gmag", "kic_rmag", "kic_imag", "kic_zmag", "kic_gredmag", "kic_d51mag", "kic_jmag", "kic_hmag", "kic_kmag", "kic_kepmag", "kic_kepler_id", "kic_tmid", "kic_scpid", "kic_altid", "kic_altsource", "kic_galaxy", "kic_blend", "kic_variable", "kic_teff", "kic_logg", "kic_feh", "kic_ebminusv", "kic_av", "kic_radius", "kic_cq", "kic_pq", "kic_aq", "kic_catkey", "kic_scpkey", "kic_parallax", "kic_glon", "kic_glat", "kic_pmtotal", "kic_grcolor", "kic_jkcolor", "kic_gkcolor", "kic_degree_ra", "kic_fov_flag", "kic_tm_designation"]
+
+kic10_dic = {
+    "ra": ("kic_ra", float),
+    "dec": ("kic_dec", float),
+    "pmra": ("kic_pmra", float),
+    "pmdec": ("kic_pmdec", float),
+    "umag": ("kic_umag", float),
+    "gmag": ("kic_gmag", float),
+    "rmag": ("kic_rmag", float),
+    "imag": ("kic_imag", float),
+    "zmag": ("kic_zmag", float),
+    "gredmag": ("kic_gredmag", float),
+    "d51mag": ("kic_d51mag", float),
+    "jmag": ("kic_jmag", float),
+    "hmag": ("kic_hmag", float),
+    "kmag": ("kic_kmag", float),
+    "kepmag": ("kic_kepmag", float),
+    "kic": ("kic_kepler_id", int),
+    "tmid": ("kic_tmid", int),
+    "scpid": ("kic_scpid", int),
+    "altid": ("kic_altid", int),
+    "altsource": ("kic_altsource", int),
+    "galaxy": ("kic_galaxy", int),
+    "blend": ("kic_blend", int),
+    "variable": ("kic_variable", int),
+    "teff": ("kic_teff", int),
+    "logg": ("kic_logg", float),
+    "feh": ("kic_feh", float),
+    "ebminusv": ("kic_ebminusv", float),
+    "av": ("kic_av", float),
+    "rad": ("kic_radius", float),
+    "cq": ("kic_cq", str),
+    "pq": ("kic_pq", int),
+    "aq": ("kic_aq", int),
+    "catkey": ("kic_catkey", int),
+    "scpkey": ("kic_scpkey", int),
+    "parallax": ("kic_parallax", float),
+    "glon": ("kic_glon", float),
+    "glat": ("kic_glat", float),
+    "pmtotal": ("kic_pmtotal", float),
+    "grcolor": ("kic_grcolor", float),
+    "jkcolor": ("kic_jkcolor", float),
+    "gkcolor": ("kic_gkcolor", float),
+    "degree_ra": ("kic_degree_ra", float),
+    "fov_flag": ("kic_fov_flag", int),
+    "tm_designation": ("kic_tm_designation", int)
 }
 
 # MAST database/kplr

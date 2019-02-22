@@ -21,6 +21,7 @@ class api(object):
         self.periodic_dir = settings.filename_periods
         self.mast_table_dir = settings.filename_mast_table
         self.gaia_dir = settings.filename_gaia_table
+        self.kic10_dir = settings.filename_kic10_table
         self.lc_img_dir = settings.filename_lc_img
         self.lc_new_dir = settings.filename_lc_new
         self.lc_old_dir = settings.filename_lc_old
@@ -48,8 +49,10 @@ class api(object):
                 updated_pars.append(param)
             elif param in settings.periodic_dic.keys():
                 periodic_pars.append(param)
-            elif param in settings.mast_params:
-                mast_pars.append(param)
+            if param in settings.kic10_dic.keys():
+                mast_table_pars.append(param)
+            # elif param in settings.mast_params:
+            #     mast_pars.append(param)
 
         if "periodic" in params:
             self._update_params(new_params, self.get_periodic_or_not(kics))
@@ -70,14 +73,15 @@ class api(object):
         if "variable" in params:
             self._update_params(new_params, self.get_variable(kics, self.lc_var_dir))
 
-        try:
-            self._update_params(new_params, self.get_mast_params(kics, mast_pars))
-        except Exception as e:
-            logger.error("can't retrieve mast params: %s-%s" % (e.message, mast_pars))
+        # try:
+        #     self._update_params(new_params, self.get_mast_params(kics, mast_pars))
+        # except Exception as e:
+        #     logger.error("can't retrieve mast params: %s-%s" % (e.message, mast_pars))
 
         # self._update_params(new_params, self.get_nonperiodic_params(kics, periodic_pars))
         self._update_params(new_params, self.get_periodic_params(kics, periodic_pars))
         self._check_params_dic(new_params, periodic_pars)
+        self._update_params(new_params, self.get_kic10_params(kics, mast_table_pars))
         self._update_params(new_params, self.get_updated_params(kics, updated_pars))
         self._update_params(new_params, self.get_gaia_params(kics, gaia_pars))
         return new_params
@@ -103,6 +107,13 @@ class api(object):
                 if param not in res.keys():
                     res[param] = np.nan
         return reses
+
+    def get_kic10_params(self, kics, params):
+        col_name_arr, type_arr = self._format_params(settings.kic10_dic, params)
+        t = table_api(self.kic10_dir, "|", 1, 15, "\n")
+        col_nos = t.get_col_nos(col_name_arr, settings.kic10_dic_keys)
+        param_res = t.parse_table_dicts(col_nos, kics, type_arr, params)
+        return param_res
 
     def get_gaia_params(self, kics, params):
         """
@@ -268,7 +279,7 @@ class api(object):
         gets star aperture from our database
         """
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
-        arrs = t.parse_table_arrs(range(1, 902), kics=kics, types=[float]*902)
+        arrs = t.parse_table_arrs(range(1, 905), kics=kics, types=[str]*2+[float]*902)
         reses = []
         for i, kic in enumerate(kics):
             curr_params = {}
@@ -277,7 +288,8 @@ class api(object):
                 curr_params["aperture"] = None
                 logger.error("couldn't parse table for this kic: %s" % kic)
             else:
-                curr_params["aperture"] = arr
+                curr_params["centers"] = arr[0:4]
+                curr_params["aperture"] = arr[4:]
             reses.append(curr_params)
         return reses
 

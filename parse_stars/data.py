@@ -13,11 +13,11 @@ from math import pi, log
 from collections import Counter
 import csv
 import matplotlib.pyplot as plt
+from matplotlib import gridspec as gs
 import numpy as np
 
 from sklearn.feature_selection import RFECV
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
@@ -57,9 +57,9 @@ class new_stars(object):
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param in ["variable"]:
-                    # self.get_is_variable()
+                    self.get_is_variable()
 
-                    self.get_params([param])
+                    # self.get_params([param])
                     self.setup_self_variable()
                 elif param == "closest_edge":
                     self.get_edge_distance()
@@ -133,10 +133,10 @@ class new_stars(object):
         yerr = star_pars["target_uncert"]
         # yerr = self._build_errorbars(x, star_pars["flux_uncert"], star_pars["qs"])
 
-        good_idxs = [i for i in range(len(y_dat)) if y_dat[i] is not None]
-        y = [y_dat[i] - 1 for i in good_idxs]
-        x = [x_dat[i] for i in good_idxs]
-        return y, x, yerr
+        # good_idxs = [i for i in range(len(y_dat)) if y_dat[i] is not None]
+        # y = [y_dat[i] - 1 for i in good_idxs]
+        # x = [x_dat[i] for i in good_idxs]
+        return y_dat, x_dat, yerr
 
     def _build_errorbars(self, x, err, qs):
         error_list = np.zeros_like(x)
@@ -150,19 +150,34 @@ class new_stars(object):
         self.non_variables = []
         self._check_params(["lcs_new", "lcs_qs"])
         for i, star in enumerate(self.res):
+            pars = star["params"]
             y, x, yerr = self._setup_lcs_xys(star)
-            m = model(y, x, yerr=yerr, qs=star["params"]["qs"])
+            m = model(y, x, yerr=yerr, qs=pars["qs"])
             res, label, bic, ssr = m.is_variable()
-            star["params"]["variable"] = res
-            star["params"]["curve_fit"] = label
-            star["params"]["var_bic_best"] = bic
-            star["params"]["var_chi2_best"] = ssr
-            star["params"]["var_res"] = m.format_res
+            pars["variable"] = res
+            pars["curve_fit"] = label
+            pars["var_bic_best"] = bic
+            pars["var_chi2_best"] = ssr
+            pars["var_res"] = m.format_res
+
+            pars["var_lcs"] = m.y_dat
+            pars["var_times"] = m.x_dat
+            pars["var_yerr"] = m.yerr_dat
+            pars["var_fmts"] = m.fmts_dat
+            pars["var_qs"] = m.qs_dat
+
+            bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
+            pars["var_bic_flat"] = bic_flat
+            pars["var_bic_var"] = bic_var
+            pars["var_label_var"] = label_var
+            pars["var_prob"] = self._calc_bic_prob(bic_flat, bic_var)
+
             if res:
                 self.variables.append(star["kic"])
             else:
                 self.non_variables.append(star["kic"])
             logger.info("done: %s, %s" % (star["kic"], label))
+
         self.params += ["variable", "curve_fit", "var_bic_best", "var_chi2_best", "var_res"]
         return 0
 
@@ -170,10 +185,13 @@ class new_stars(object):
         labels_other = ["Linear1D", "Parabola1D", "best_Sine1D"]
         label_flat = "Const1D"
         bic_flat = arr[0]
-        bics_other = arr[2:8:2]
+        bics_other = arr[2::2]
         best_i = np.argmin(bics_other)
         bic_var = bics_other[best_i]
-        label_var = labels_other[best_i]
+        if best_i < 2:
+            label_var = labels_other[best_i]
+        else:
+            label_var = labels_other[-1]
         return bic_flat, label_flat, bic_var, label_var
 
     def _calc_bic_prob(self, bic_flat, bic_var):
@@ -193,18 +211,63 @@ class new_stars(object):
                 self.non_variables.append(star["kic"])
 
             # get relevant bics / results
-            try:
-                bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
-                pars["var_bic_flat"] = bic_flat
-                pars["var_bic_var"] = bic_var
-                pars["var_label_var"] = label_var
-                pars["var_prob"] = self._calc_bic_prob(bic_flat, bic_var)
-
-            except Exception as e:
-                logger.error("variables table missing data for %s" % star["kic"])
+            bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
+            pars["var_bic_flat"] = bic_flat
+            pars["var_bic_var"] = bic_var
+            pars["var_label_var"] = label_var
+            pars["var_prob"] = self._calc_bic_prob(bic_flat, bic_var)
 
             self.params += ["var_bic_flat", "var_bic_var", "var_label_var", "var_prob"]
             return 0
+
+    def plot_variable_lcs(self, show=True, save=False):
+
+        self._check_params(["lcs_img", "variable"])
+        for i, star in enumerate(self.res):
+
+            kic = star["kic"]
+            pars = star["params"]
+
+            fmts = np.array(pars["var_fmts"])
+            times = np.array(pars["var_times"])
+            lcs = np.array(pars["var_lcs"])
+            yerrs = np.array(pars["var_yerr"])
+            qs = np.array(pars["var_qs"])
+            img = np.array(pars["aperture"]).reshape((30,30))
+
+            dat_info = "flat %f variable %f %s PROB %f" % \
+                (pars["var_bic_flat"], pars["var_bic_var"], pars["var_label_var"], pars["var_prob"])
+
+            fig = plt.figure(figsize=(11,8))
+            plt.subplot2grid((3,3), (1,2))
+            plt.title(kic, fontsize=20)
+            plt.imshow(img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
+            plt.gcf().text(4/8.5, 1/11., dat_info, \
+                           ha='center', fontsize = 11)
+            plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=3)
+
+            for i in range(len(lcs)):
+                plt.errorbar(times[i], lcs[i], yerr=yerrs[i], fmt=fmts[i])
+            plt.xlabel('Time', fontsize=15)
+            plt.ylabel('Relative Flux', fontsize=15)
+            fig.tight_layout()
+
+            # for i in range(4):
+            #     g = np.where(qs == i)[0]
+            #     plt.errorbar(times[g], lcs[g], \
+            #                  yerr=yerrs[i], fmt=fmt[i])
+            #     plt.xlabel('Time', fontsize=15)
+            #     plt.ylabel('Relative Flux', fontsize=15)
+
+                # fig.tight_layout()
+
+            if show:
+                plt.show()
+            if save:
+                plt.savefig(kic + "_plot.jpg")
+            plt.close("all")
+
+        return 0
 
     def plot_variable_params(self, paramy, paramx):
         self._check_params(["variable", paramy, paramx])
@@ -285,8 +348,8 @@ class new_stars(object):
             logger.error("no data points for this param")
             return 1
 
-        plt.hist(var_xs, color=["r"], alpha=0.5, label="variable")
-        plt.hist(non_var_xs, color=["b"], alpha=0.5, label="non variable")
+        plt.hist(var_xs, 10, color=["r"], alpha=0.5, label="variable")
+        plt.hist(non_var_xs, 10, color=["b"], alpha=0.5, label="non variable")
         plt.legend(loc="upper right")
         plt.xlabel(param)
         plt.ylabel("frequency")
@@ -340,7 +403,7 @@ class new_stars(object):
         return params[rfe.support_]
 
     def do_random_forest(self, params, target_param, train_factor):
-        clf = RandomForestRegressor()
+        clf = RandomForestClassifier()
         all_dat, all_vars = self._setup_skl(params, target_param)
         if not all_dat and not all_vars:
             logger.error("not enough data")
