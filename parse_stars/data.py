@@ -60,7 +60,7 @@ class new_stars(object):
                     self.get_is_variable()
 
                     # self.get_params([param])
-                    self.setup_self_variable()
+                    # self.setup_self_variable()
                 elif param == "closest_edge":
                     self.get_edge_distance()
                 else:
@@ -366,13 +366,58 @@ class new_stars(object):
             w.writerow(header)
             for i, star in enumerate(self.res):
                 arr = [star["kic"]]
-                try:
-                    for param in params:
+                for param in params:
+                    try:
                         arr.append(star["params"][param])
-                    w.writerow(arr)
-                except Exception as e:
-                    logger.error("param %s doesn't exist for %s: %s" % \
-                                 (param, star["kic"], e.message))
+                    except Exception as e:
+                        arr.append("error")
+                        logger.error("param %s doesn't exist for %s: %s" % \
+                                     (param, star["kic"], e.message))
+                w.writerow(arr)
+        logger.info("done")
+        return 0
+    
+
+    def print_var_params(self, fout):
+        self._check_params(["lcs_new", "lcs_qs"])
+        params = ["variable", "var_bic_flat", "var_bic_var", "var_label_var", "var_prob", "var_res"]
+        header = ["kic"] + params
+        with open(fout, "w") as f:
+            w = csv.writer(f, delimiter=",", lineterminator="\n")
+            w.writerow(header)
+            for i, star in enumerate(self.res):
+                arr = [star["kic"]]
+                pars = star["params"]
+
+                y, x, yerr = self._setup_lcs_xys(star)
+                m = model(y, x, yerr=yerr, qs=pars["qs"])
+                res, label, bic, ssr = m.is_variable()
+                pars["variable"] = res
+                pars["curve_fit"] = label
+                pars["var_bic_best"] = bic
+                pars["var_chi2_best"] = ssr
+                pars["var_res"] = m.format_res
+
+                pars["var_lcs"] = m.y_dat
+                pars["var_times"] = m.x_dat
+                pars["var_yerr"] = m.yerr_dat
+                pars["var_fmts"] = m.fmts_dat
+                pars["var_qs"] = m.qs_dat
+
+                bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
+                pars["var_bic_flat"] = bic_flat
+                pars["var_bic_var"] = bic_var
+                pars["var_label_var"] = label_var
+                pars["var_prob"] = self._calc_bic_prob(bic_flat, bic_var)
+
+                for param in params:
+                    try:
+                        arr.append(star["params"][param])
+                    except Exception as e:
+                        arr.append("error")
+                        logger.error("param %s doesn't exist for %s: %s" % \
+                                     (param, star["kic"], e.message))
+                w.writerow(arr)
         logger.info("done")
         return 0
 

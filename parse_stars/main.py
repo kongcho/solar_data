@@ -79,7 +79,7 @@ def output(kics, n):
     params = ["variable", "var_bic_flat", "var_bic_var", "var_label_var", "var_prob", "var_res"]
     fout = "var_out_%d.out" % n
     ns = new_stars(kics)
-    ns.print_params(fout, params)
+    ns.print_var_params(fout)
     print "-------------------- OUTPUT %d DONE" % n
     return 0
 

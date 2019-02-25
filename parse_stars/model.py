@@ -242,7 +242,6 @@ class model(object):
         ssrs.append(cur_ssr)
         self.format_res += [bic, "[" + format_arr(cur_p, ",") + "]"]
 
-
         self.bics = np.array(bics)
         self.ssrs = np.array(ssrs)
 
