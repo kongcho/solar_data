@@ -307,7 +307,7 @@ class api(object):
 
     def _parse_var_params(self, string):
         parse_string = "[" + string + "]"
-        literal_vals = ast.literal_eval(parse_string)
+        literal_vals = ast.literal_eval(parse_string)[0]
         return literal_vals
 
     def get_variable(self, kics, lc_file):
@@ -315,22 +315,25 @@ class api(object):
         gets if star is variable or not with Chi-squared values from our database
         """
         t = table_api(lc_file, delimiter=",", skip_rows=1, kic_col_no=0)
-        arrs = t.parse_table_arrs(range(1, 6), kics=kics, types=[str, str, float, float, str])
+        arrs = t.parse_table_arrs(range(1, 7), kics=kics, types=[str, float, float, str, float, str])
         reses = []
         for i, kic in enumerate(kics):
             curr_params = {}
             arr = arrs[i]
             if len(arr) == 0:
-                curr_params["variable"], curr_params["curve_fit"], \
-                    curr_params["var_chi2_best"], \
-                    curr_params["var_bic_best"] = (np.nan for _ in range(4))
+                curr_params["variable"], curr_params["var_bic_flat"], \
+                    curr_params["var_bic_var"], \
+                    curr_params["var_label_var"], \
+                    curr_params["var_prob"], \
+                    curr_params["var_res"] = (np.nan for _ in range(6))
                 logger.error("couldn't parse table for this kic: %s" % kic)
             else:
                 curr_params["variable"] = 1 if arr[0] == "True" else 0
-                curr_params["curve_fit"] = arr[1]
-                curr_params["var_chi2_best"] = arr[2]
-                curr_params["var_bic_best"] = arr[3]
-                curr_params["var_res"] = self._parse_var_params(arr[4])
+                curr_params["var_bic_flat"] = arr[1]
+                curr_params["var_bic_var"] = arr[2]
+                curr_params["var_label_var"] = arr[3]
+                curr_params["var_prob"] = arr[4]
+                curr_params["var_res"] = self._parse_var_params(arr[5])
             reses.append(curr_params)
         return reses
 

@@ -26,6 +26,7 @@ class new_stars(object):
     def __init__(self, kics):
         self.kics = kics
         self.params = []
+        self.sorted = False
         self.res = [{} for _ in kics]
         for i, star in enumerate(self.res):
             star["kic"] = self.kics[i]
@@ -57,16 +58,26 @@ class new_stars(object):
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param in ["variable"]:
-                    self.get_is_variable()
+                    # self.get_is_variable()
 
-                    # self.get_params([param])
-                    # self.setup_self_variable()
+                    self.get_params([param])
+                    self.setup_self_variable()
                 elif param == "closest_edge":
                     self.get_edge_distance()
                 else:
                     rem_pars.append(param)
         self.get_params(rem_pars)
         return 0
+
+    def _setup_fmts(self, qs):
+        fmt = ['ko', 'rD', 'b^', 'gs']
+        fmts = []
+        for q in qs:
+            for i in range(4):
+                if q == i:
+                    fmts.append(fmt[i])
+        return np.array(fmts)
+
 
     def _calc_luminosity(self, radius, teff):
         sb_const = float("5.670367e-08")
@@ -160,11 +171,11 @@ class new_stars(object):
             pars["var_chi2_best"] = ssr
             pars["var_res"] = m.format_res
 
-            pars["var_lcs"] = m.y_dat
-            pars["var_times"] = m.x_dat
-            pars["var_yerr"] = m.yerr_dat
-            pars["var_fmts"] = m.fmts_dat
-            pars["var_qs"] = m.qs_dat
+            pars["lcs"] = m.y_dat
+            pars["times"] = m.x_dat
+            pars["target_uncert"] = m.yerr_dat
+            pars["fmts"] = m.fmts_dat
+            pars["qs"] = m.qs_dat
 
             bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
             pars["var_bic_flat"] = bic_flat
@@ -184,6 +195,7 @@ class new_stars(object):
     def _check_var_params(self, arr):
         labels_other = ["Linear1D", "Parabola1D", "best_Sine1D"]
         label_flat = "Const1D"
+        self.var_labels = [label_flat] + labels_other
         bic_flat = arr[0]
         bics_other = arr[2::2]
         best_i = np.argmin(bics_other)
@@ -201,6 +213,7 @@ class new_stars(object):
     def setup_self_variable(self):
         self.variables = []
         self.non_variables = []
+
         for i, star in enumerate(self.res):
             pars = star["params"]
 
@@ -212,27 +225,27 @@ class new_stars(object):
 
             # get relevant bics / results
             bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
+            pars["var_best_label"] = label_var if bic_var < bic_flat else label_flat
             pars["var_bic_flat"] = bic_flat
             pars["var_bic_var"] = bic_var
             pars["var_label_var"] = label_var
             pars["var_prob"] = self._calc_bic_prob(bic_flat, bic_var)
 
             self.params += ["var_bic_flat", "var_bic_var", "var_label_var", "var_prob"]
-            return 0
+        return 0
 
     def plot_variable_lcs(self, show=True, save=False):
-
-        self._check_params(["lcs_img", "variable"])
+        self._check_params(["lcs_img", "lcs_new", "lcs_qs", "variable"])
         for i, star in enumerate(self.res):
 
             kic = star["kic"]
             pars = star["params"]
 
-            fmts = np.array(pars["var_fmts"])
-            times = np.array(pars["var_times"])
-            lcs = np.array(pars["var_lcs"])
-            yerrs = np.array(pars["var_yerr"])
-            qs = np.array(pars["var_qs"])
+            times = np.array(pars["times"])
+            lcs = np.array(pars["lcs"])
+            yerrs = np.array(pars["target_uncert"])
+            qs = np.array(pars["qs"])
+            fmts = self._setup_fmts(qs)
             img = np.array(pars["aperture"]).reshape((30,30))
 
             dat_info = "flat %f variable %f %s PROB %f" % \
@@ -242,7 +255,7 @@ class new_stars(object):
             plt.subplot2grid((3,3), (1,2))
             plt.title(kic, fontsize=20)
             plt.imshow(img, interpolation='nearest', cmap='gray', vmin=98000*52, vmax=104000*52)
-            plt.gcf().text(4/8.5, 1/11., dat_info, \
+            plt.gcf().text(3/8.5, 1/11., dat_info, \
                            ha='center', fontsize = 11)
             plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=3)
 
@@ -264,7 +277,7 @@ class new_stars(object):
             if show:
                 plt.show()
             if save:
-                plt.savefig(kic + "_plot.jpg")
+                plt.savefig(kic + "_plot.png")
             plt.close("all")
 
         return 0
@@ -358,6 +371,45 @@ class new_stars(object):
         logger.info("done")
         return 0
 
+    def _sort_kics_by_pattern(self):
+        self._check_params(["variable"])
+        all_res = {}
+        for label in self.var_labels:
+            all_res[label] = []
+        for i, star in enumerate(self.res):
+            all_res[label].append(star["kic"])
+        self.sorted = True
+        return 0
+
+    def check_sort(self):
+        if not self.sorted:
+            self._sort_kics_by_pattern()
+        return 0
+
+    def rewind_sort(self):
+        self.sorted = False
+
+    def plot_pattern_hist(self, param):
+        self._check_params(["variable", param])
+        values_by_label = {}
+        all_values = []
+        for label in self.var_labels:
+            values_by_label[label] = []
+        for i, star in enumerate(self.res):
+            pars = star["params"]
+            label = pars["var_best_label"]
+            values_by_label[label].append(pars[param])
+        for key in self.var_labels:
+            values_by_label[key] = np.array(values_by_label[key])
+            all_values.append(values_by_label[key])
+        plt.hist(all_values, 10, label=self.var_labels)
+        plt.legend(loc="upper right")
+        plt.xlabel(param)
+        plt.ylabel("frequency")
+        plt.title("%s" % (param))
+        logger.info("done")
+
+
     def print_params(self, fout, params):
         self._check_params(params)
         header = ["kic"] + params
@@ -398,11 +450,11 @@ class new_stars(object):
                 pars["var_chi2_best"] = ssr
                 pars["var_res"] = m.format_res
 
-                pars["var_lcs"] = m.y_dat
-                pars["var_times"] = m.x_dat
-                pars["var_yerr"] = m.yerr_dat
-                pars["var_fmts"] = m.fmts_dat
-                pars["var_qs"] = m.qs_dat
+                pars["lcs"] = m.y_dat
+                pars["times"] = m.x_dat
+                pars["target_uncert"] = m.yerr_dat
+                pars["fmts"] = m.fmts_dat
+                pars["qs"] = m.qs_dat
 
                 bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
                 pars["var_bic_flat"] = bic_flat

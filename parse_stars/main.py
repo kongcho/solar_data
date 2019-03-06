@@ -97,30 +97,40 @@ def randfor(kics, factor):
         res_new = n.do_random_forest(params, "var_prob", factor)
     return 0
 
-def plot_hists(n, tot, params):
-    kics = get_nth_col("./data/table4.dat", 0, " ", 0)
+def plot_hists(kics):
     n = new_stars(kics)
 
-    n.plot_variable_params("luminosity", "teff")
-    plt.savefig("./lumvsteff.png")
-    plt.close("all")
+    # n.plot_variable_params("luminosity", "teff")
+    # plt.savefig("./lumvsteff.png")
+    # plt.close("all")
 
     param = "luminosity"
-    n.plot_variable_hist(param)
+    n.plot_pattern_hist(param)
     plt.savefig("./%s.png" % param)
     plt.close("all")
 
-    for param in ["periodic"]:
-        n.plot_variable_bar(param)
-        plt.savefig("./%s.png" % param)
-        plt.close("all")
+    # for param in ["periodic"]:
+    #     n.plot_variable_bar(param)
+    #     plt.savefig("./%s.png" % param)
+    #     plt.close("all")
 
     for param in ["dist", "logg", "mass", "metallicity", "prot", "rad", "teff", "rho", \
                   "av", "rper"]:
-        n.plot_variable_hist(param)
+        n.plot_pattern_hist(param)
         plt.savefig("./%s.png" % param)
         plt.close("all")
 
+def merge():
+    n = 8
+    output = "./var_out_FINAL.out"
+    with open(output, "w") as f:
+        for i in range(n):
+            cur_f = "./var_out_" + str(i) + ".out"
+            with open(cur_f, "r") as f1:
+                next(f1)
+                for line in f1:
+                    f.write(line)
+    return 0
 
 
 
@@ -153,11 +163,18 @@ def main():
     # randfor(kics, 1)
 
     # params = ["variable", "var_bic_flat", "var_bic_var", "var_label_var", "var_prob", "var_res"]
-    kics = get_nth_col("./data/kics.out")[:200:99]
+    merge()
+    kics = get_nth_col("./var_out_FINAL.out", 0, ",", 0)
+    plot_hists(kics)
     # n = new_stars(kics)
+    # n.plot_pattern_hist("teff")
+    # plt.show()
+    # n.plot_variable_lcs(show=False, save=True)
+
+
     # n.print_params("./test.txt", params)
 
-    do_multiprocess(1, run_kics, output, kics)
+    # do_multiprocess(1, run_kics, output, kics)
 
     make_sound(0.8, 440)
     logger.info("### everything done ###")
