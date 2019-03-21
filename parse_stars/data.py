@@ -177,6 +177,13 @@ class new_stars(object):
             pars["fmts"] = m.fmts_dat
             pars["qs"] = m.qs_dat
 
+            if np.all(np.isnan(pars["var_res"])):
+                pars["var_bic_flat"] = np.nan
+                pars["var_bic_var"] = np.nan
+                pars["var_label_var"] = np.nan
+                pars["var_prob"] = np.nan
+                continue
+
             bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
             pars["var_bic_flat"] = bic_flat
             pars["var_bic_var"] = bic_var

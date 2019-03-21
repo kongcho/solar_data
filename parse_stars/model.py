@@ -334,7 +334,7 @@ class model(object):
 
     def is_variable(self):
         if np.all(np.isnan(self.y)):
-            self.format_res = str([np.nan])
+            self.format_res = [np.nan]
             return False, "Unsure", np.nan, np.nan
 
         self.run_const_model()
