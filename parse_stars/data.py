@@ -17,7 +17,7 @@ from matplotlib import gridspec as gs
 import numpy as np
 
 from sklearn.feature_selection import RFECV
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
@@ -58,10 +58,10 @@ class new_stars(object):
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param in ["variable"]:
-                    # self.get_is_variable() # recalculate
+                    self.get_is_variable() # recalculate
 
-                    self.get_params([param])
-                    self.setup_self_variable()
+                    # self.get_params([param])
+                    # self.setup_self_variable()
                 elif param == "closest_edge":
                     self.get_edge_distance()
                 else:
@@ -218,17 +218,17 @@ class new_stars(object):
         return p_var
 
     def setup_self_variable(self):
-        self.variables = []
-        self.non_variables = []
+        # self.variables = []
+        # self.non_variables = []
 
         for i, star in enumerate(self.res):
             pars = star["params"]
 
             # setup self.variables, self.non_variables
-            if pars["variable"]:
-                self.variables.append(star["kic"])
-            else:
-                self.non_variables.append(star["kic"])
+            # if pars["variable"]:
+            #     self.variables.append(star["kic"])
+            # else:
+                # self.non_variables.append(star["kic"])
 
             # get relevant bics / results
             bic_flat, label_flat, bic_var, label_var = self._check_var_params(pars["var_res"])
@@ -289,7 +289,7 @@ class new_stars(object):
 
         return 0
 
-    def plot_variable_params(self, paramy, paramx):
+    def OOD_plot_variable_params(self, paramy, paramx):
         self._check_params(["variable", paramy, paramx])
         non_var_xs = []
         non_var_ys = []
@@ -316,7 +316,7 @@ class new_stars(object):
         logger.info("done")
         return 0
 
-    def plot_variable_bar(self, param):
+    def OOD_plot_variable_bar(self, param):
         self._check_params(["variable", param])
         non_var_xs = []
         var_xs = []
@@ -349,7 +349,7 @@ class new_stars(object):
         logger.info("done")
         return 0
 
-    def plot_variable_hist(self, param):
+    def OOD_plot_variable_hist(self, param):
         self._check_params(["variable", param])
         non_var_xs = []
         var_xs = []
@@ -583,7 +583,7 @@ class new_stars(object):
         return params[rfe.support_]
 
     def do_random_forest(self, params, target_param, train_factor):
-        clf = RandomForestClassifier()
+        clf = RandomForestRegressor()
         all_dat, all_vars = self._setup_skl(params, target_param)
         if not all_dat and not all_vars:
             logger.error("not enough data")
