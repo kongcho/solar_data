@@ -9,7 +9,7 @@ from aperture import run_photometry, calculate_better_aperture, model_background
 from model import model
 logger = setup_logging()
 
-from math import pi, log
+from math import pi, log, ceil, floor
 from collections import Counter
 import csv
 import matplotlib.pyplot as plt
@@ -58,7 +58,7 @@ class new_stars(object):
                 if param == "luminosity":
                     self.get_luminosity()
                 elif param in ["variable"]:
-                    # self.get_is_variable()
+                    # self.get_is_variable() # recalculate
 
                     self.get_params([param])
                     self.setup_self_variable()
@@ -200,18 +200,18 @@ class new_stars(object):
         return 0
 
     def _check_var_params(self, arr):
-        labels_other = ["Linear1D", "Parabola1D", "best_Sine1D"]
-        label_flat = "Const1D"
-        self.var_labels = [label_flat] + labels_other
+        self.var_labels_other = ["Linear1D", "Parabola1D", "best_Sine1D"]
+        self.var_label_flat = "Const1D"
+        self.var_labels = [self.var_label_flat] + self.var_labels_other
         bic_flat = arr[0]
         bics_other = arr[2::2]
         best_i = np.argmin(bics_other)
         bic_var = bics_other[best_i]
         if best_i < 2:
-            label_var = labels_other[best_i]
+            label_var = self.var_labels_other[best_i]
         else:
-            label_var = labels_other[-1]
-        return bic_flat, label_flat, bic_var, label_var
+            label_var = self.var_labels_other[-1]
+        return bic_flat, self.var_label_flat, bic_var, label_var
 
     def _calc_bic_prob(self, bic_flat, bic_var):
         p_var = np.divide(1, 1 + np.exp(0.5 * (bic_var - bic_flat)))
@@ -396,6 +396,84 @@ class new_stars(object):
     def rewind_sort(self):
         self.sorted = False
 
+    def _get_closest_bin(self, value, bins):
+        for bin in bins:
+            if value < bin:
+                return bin
+
+    def _round_down(self, n, d=2):
+        return ceil(n*100)/100
+
+    def _round_up(self, n, d=2):
+        return floor(n*100)/100
+
+    def plot_pattern_bar(self, param):
+        self._check_params(["variable", param])
+        values_by_label = {}
+        all_values = []
+        min_val = np.inf
+        max_val = -np.inf
+        for label in self.var_labels:
+            values_by_label[label] = []
+        for i, star in enumerate(self.res):
+            pars = star["params"]
+            label = pars["var_best_label"]
+            values_by_label[label].append(pars[param])
+            if pars[param] < min_val:
+                min_val = pars[param]
+            if pars[param] > max_val:
+                max_val = pars[param]
+
+        values_by_bin = {}
+        number_of_bins = 8
+
+        min_val = self._round_down(min_val)
+        max_val = self._round_up(max_val)
+        bin_width = np.around(np.divide((max_val-min_val), number_of_bins), decimals=2)
+        bins = np.arange(min_val+bin_width, max_val+bin_width, bin_width)
+        bin_labels = np.arange(min_val+bin_width/2, max_val+bin_width/2, bin_width)
+
+        for cur_bin in bins:
+            values_by_bin[cur_bin] = []
+            for _ in self.var_labels:
+                values_by_bin[cur_bin].append(0)
+
+        for i, key in enumerate(self.var_labels):
+            cur_values_by_label = values_by_label[key]
+            for value_in_label in cur_values_by_label:
+                cur_bin = self._get_closest_bin(value_in_label, bins)
+                values_by_bin[cur_bin][i] += 1
+
+        all_percentages = []
+        for _ in self.var_labels:
+            all_percentages.append([])
+        for cur_bin in bins:
+            cur_percentage = []
+            cur_counts = values_by_bin[cur_bin]
+            cur_sum = np.sum(cur_counts)
+            for i, key in enumerate(self.var_labels):
+                if cur_sum != 0:
+                    all_percentages[i].append(np.around(np.divide(cur_counts[i], \
+                                                                  float(cur_sum)), decimals=2))
+                else:
+                    all_percentages[i].append(0)
+
+        cur_bottom = np.zeros(number_of_bins)
+        for i, key in enumerate(self.var_labels):
+            if key == "Const1D":
+                continue
+            percentages_by_bin = np.array(all_percentages[i])
+            plt.bar(bins, percentages_by_bin, width=bin_width*0.9, label=key, bottom=cur_bottom)
+            cur_bottom += percentages_by_bin
+
+        plt.xticks(bin_labels)
+        plt.legend(loc="upper right")
+        plt.xlabel(param)
+        plt.ylabel("percentage of variable star within each bin")
+        plt.title("%s" % (param))
+        logger.info("done")
+        return 0
+
     def plot_pattern_hist(self, param):
         self._check_params(["variable", param])
         values_by_label = {}
@@ -412,10 +490,9 @@ class new_stars(object):
         plt.hist(all_values, 10, label=self.var_labels)
         plt.legend(loc="upper right")
         plt.xlabel(param)
-        plt.ylabel("frequency")
+        plt.ylabel("counts of stars")
         plt.title("%s" % (param))
         logger.info("done")
-
 
     def print_params(self, fout, params):
         self._check_params(params)
@@ -435,7 +512,6 @@ class new_stars(object):
                 w.writerow(arr)
         logger.info("done")
         return 0
-    
 
     def print_var_params(self, fout):
         self._check_params(["lcs_new", "lcs_qs"])
